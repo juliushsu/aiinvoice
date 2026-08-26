@@ -158,6 +158,7 @@
       <div class="nav-item active" data-page="dashboard"><span class="nav-icon">▦</span> 儀表板</div>
       <div class="nav-item" data-page="upload"><span class="nav-icon">⇪</span> 上傳 / 清單</div>
       <div class="nav-item" data-page="review"><span class="nav-icon">✎</span> 資料校對</div>
+      <div class="nav-item" data-page="expense"><span class="nav-icon">🧾</span> 費用申請</div>
       <div class="nav-item" data-page="approval"><span class="nav-icon">✓</span> 審批佇列</div>
       <div class="nav-item" data-page="export"><span class="nav-icon">⇩</span> 匯出紀錄</div>
       <div class="nav-item" data-page="settings"><span class="nav-icon">⚙</span> 設定</div>
@@ -213,7 +214,7 @@
           <button class="btn btn-outline" id="btnCamera">拍照 / 掃描發票</button>
           <button class="btn btn-outline" id="btnQr">掃描電子發票 QR Code</button>
         </div>
-        <div class="note">「拍照/掃描發票」在手機瀏覽器會直接開啟相機；桌機會退回一般選檔案。圖片上傳後會先偵測發票上的 QR Code 直接解碼（財政部固定格式，最準確）；找不到 QR 才退回瀏覽器端 OCR（Tesseract.js）用文字辨識猜欄位，正確率有限。不論哪種方式，都請務必在校對頁人工核對每一欄；PDF 檔案目前僅支援手動輸入。</div>
+        <div class="note">「拍照/掃描發票」在手機瀏覽器會直接開啟相機；桌機會退回一般選檔案。圖片上傳後會先偵測發票上的 QR Code 直接解碼（財政部固定格式，最準確）；找不到 QR 才退回瀏覽器端 OCR（Tesseract.js）用文字辨識猜欄位，正確率有限。PDF 檔案會先用 PDF.js 把第1頁轉成圖片，再走同一套QR/OCR流程（多頁PDF僅處理第1頁）。不論哪種方式，都請務必在校對頁人工核對每一欄。</div>
         <input type="file" id="fileInput" accept="image/*,application/pdf" multiple style="display:none">
         <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
       </div>
@@ -275,12 +276,62 @@
       </div>
     </div>
 
+    <!-- ============ EXPENSE APPLICATION ============ -->
+    <div class="page" id="page-expense">
+      <div class="page-header">
+        <div><h2>費用申請</h2><p>一張申請單可包含多筆費用項目，逐筆掃描/連結憑證後一併送出主管審核</p></div>
+      </div>
+
+      <div class="card">
+        <h3>申請人資訊</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">部門</label><select id="exp_dept" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"></select></div>
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">職稱</label><input id="exp_title" placeholder="例如：業務專員" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;"></div>
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">姓名</label><input id="exp_name" placeholder="申請人姓名" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;"></div>
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">申請日期</label><input type="date" id="exp_date" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;"></div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;">
+        <div style="padding:18px 18px 0;"><h3>費用項目明細</h3></div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr>
+              <th style="width:36px;">#</th><th>費用類別</th><th>憑證類別</th><th>申請理由 / 項目</th>
+              <th style="width:70px;">數量</th><th style="width:100px;">單價</th><th style="text-align:right;width:100px;">金額</th>
+              <th style="width:140px;">憑證</th><th style="width:40px;"></th>
+            </tr></thead>
+            <tbody id="expenseItemsBody"></tbody>
+          </table>
+        </div>
+        <div style="padding:14px 18px 18px;display:flex;justify-content:space-between;align-items:center;">
+          <button class="btn btn-outline btn-sm" id="btnAddExpenseRow">＋ 新增一列</button>
+          <div style="font-size:15px;font-weight:700;">總計：NT$ <span id="expenseTotal" style="font-variant-numeric:tabular-nums;">0</span></div>
+        </div>
+      </div>
+
+      <div class="review-actions" style="border-top:none;padding-top:0;">
+        <button class="btn btn-outline" id="btnExpenseDraftSave">存草稿</button>
+        <button class="btn btn-primary" id="btnExpenseSubmit">送出主管審核</button>
+      </div>
+
+      <div class="card">
+        <h3>我的申請單紀錄</h3>
+        <table>
+          <thead><tr><th>申請單號</th><th>日期</th><th>申請人</th><th>項目數</th><th style="text-align:right">總金額</th><th>狀態</th></tr></thead>
+          <tbody id="expenseAppsListBody"></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ============ APPROVAL QUEUE ============ -->
     <div class="page" id="page-approval">
       <div class="page-header">
         <div><h2>審批佇列</h2><p>依金額門檻自動路由；超過 NT$50,000 需 CFO 覆核</p></div>
         <button class="btn btn-outline">批次核准已勾選</button>
       </div>
+
+      <div class="card" style="background:transparent;border:none;box-shadow:none;padding:0;margin-bottom:8px;"><h3 style="font-size:14px;color:var(--muted);">發票審批</h3></div>
 
       <div class="approval-card" data-id="CD87654321">
         <div class="approval-top">
@@ -315,6 +366,9 @@
         </div>
         <textarea class="reject-note" placeholder="請填寫退回原因..."></textarea>
       </div>
+
+      <div class="card" style="background:transparent;border:none;box-shadow:none;padding:0;margin:24px 0 8px;"><h3 style="font-size:14px;color:var(--muted);">費用申請審批</h3></div>
+      <div id="expenseApprovalList"></div>
     </div>
 
     <!-- ============ EXPORT ============ -->
@@ -348,9 +402,10 @@
             <tr><td>總金額 / 稅額</td><td><input class="inline-input" value="金額/稅額"></td><td><input class="inline-input" value="5" style="width:50px"></td></tr>
           </tbody>
         </table>
-        <div style="margin-top:16px;display:flex;gap:10px;">
-          <button class="btn btn-primary" id="btnExportCsv">⇩ 匯出 CSV</button>
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="btnExportCsv">⇩ 匯出發票 CSV</button>
           <button class="btn btn-outline" id="btnExportXlsx">⇩ 匯出 Excel（示意，本原型以CSV產出）</button>
+          <button class="btn btn-primary" id="btnExportExpenseCsv">⇩ 匯出費用申請 CSV</button>
         </div>
       </div>
 
@@ -408,9 +463,15 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- 瀏覽器端 OCR 引擎（Tesseract.js）與 QR Code 解碼器（jsQR）：都不需在電腦安裝任何套件，開啟本頁時瀏覽器會自動從網路下載，純本機執行、不會把影像傳到任何伺服器 -->
+<!-- 瀏覽器端 OCR 引擎（Tesseract.js）、QR Code 解碼器（jsQR）、PDF 轉圖片引擎（PDF.js）：都不需在電腦安裝任何套件，開啟本頁時瀏覽器會自動從網路下載，純本機執行、不會把影像傳到任何伺服器 -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if(typeof pdfjsLib !== 'undefined'){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 
 <script>
   // ================= Navigation =================
@@ -459,7 +520,7 @@
             sales:f('533','high'), tax:f('27','high'), total:f('560','high'), taxType:f('應稅','high') } },
   ];
 
-  const badgeMap = { '待辨識':'b-gray','辨識中':'b-blue','待確認':'b-amber','待簽核':'b-blue','已核准':'b-green','異常':'b-red','已匯出':'b-purple' };
+  const badgeMap = { '待辨識':'b-gray','辨識中':'b-blue','待確認':'b-amber','待簽核':'b-blue','已核准':'b-green','異常':'b-red','已匯出':'b-purple','已退回':'b-red','草稿':'b-gray' };
 
   function renderTable(){
     const tbody = document.getElementById('invoiceTableBody');
@@ -607,6 +668,26 @@
     inv.amount = isNaN(amt) ? inv.amount : amt;
     inv.status = '待簽核';
     renderTable();
+
+    // 如果這張發票是從「費用申請」表單的某一列按「掃描/上傳憑證」進來的，回填該列並跳回費用申請表單
+    if(pendingExpenseAttach != null){
+      const item = expenseDraft.items.find(i=>i.id===pendingExpenseAttach);
+      if(item){
+        item.linkedInvoiceIdx = currentIdx;
+        const vendorLabel = (inv.vendor && inv.vendor !== '(請確認)') ? inv.vendor : ('賣方統編 '+(inv.ocr.sellerTax.v || '—'));
+        item.reason = item.reason || (vendorLabel + '（' + inv.no + '）');
+        item.qty = 1;
+        item.unitPrice = inv.amount;
+        item.amount = inv.amount;
+        item.voucherType = inv.type === '三聯式' ? '電子發票（三聯式）' : '電子發票（二聯式）';
+      }
+      pendingExpenseAttach = null;
+      renderExpenseForm();
+      toast('發票審核通過，已自動帶入費用項目金額');
+      goPage('expense');
+      return;
+    }
+
     toast('已送出審核，通知主管進行簽核');
     goPage('upload');
   });
@@ -664,15 +745,48 @@
         const reader = new FileReader();
         reader.onload = e=>{ inv.image = e.target.result; runOcr(inv, idx); };
         reader.readAsDataURL(file);
+      } else if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name)){
+        (async ()=>{
+          try{
+            if(typeof pdfjsLib === 'undefined') throw new Error('PDF解析引擎（PDF.js）尚未載入成功，請確認網路連線');
+            toast('正在把PDF第1頁轉成圖片…（多頁PDF僅處理第1頁）');
+            const canvas = await Promise.race([
+              renderPdfFirstPage(file),
+              new Promise((_,rej)=>setTimeout(()=>rej(new Error('PDF轉換逾時，可能是檔案過大或格式特殊')), 15000)),
+            ]);
+            inv.image = canvas.toDataURL('image/png');
+            inv.fileType = 'image/png'; // 轉成圖片後，跟一般照片走同一套QR/OCR辨識流程
+            runOcr(inv, idx);
+          } catch(err){
+            console.error('PDF render failed', err);
+            inv.status = '待確認';
+            inv.date = '(請確認)'; inv.vendor = '(請確認)'; inv.type = inv.ocr.type.v;
+            inv.rawOcrText = '⚠ PDF 轉換失敗：' + (err && err.message ? err.message : String(err)) + '\n請手動輸入下列欄位，或改用照片/截圖上傳。';
+            renderTable();
+            openReview(idx);
+          }
+        })();
       } else {
-        // PDF / 其他格式：本原型的 OCR 引擎僅處理影像，PDF 需另接文字擷取，暫以手動輸入示範
+        // 其他非圖片、非PDF格式：暫以手動輸入示範
         inv.status = '待確認';
         inv.date = '(請確認)'; inv.vendor = '(請確認)'; inv.type = inv.ocr.type.v;
         renderTable();
-        toast('PDF 檔案本原型尚未接文字擷取，請對照左側檔名手動輸入');
+        toast('不支援的檔案格式，請對照檔名手動輸入');
         openReview(idx);
       }
     });
+  }
+
+  // ---- PDF → 圖片（用 PDF.js 把第1頁畫成 canvas，之後就跟一般照片走同一套QR/OCR流程） ----
+  async function renderPdfFirstPage(file){
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.5 }); // 放大一點，OCR/QR辨識率較好
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    return canvas;
   }
 
   // ---- helpers: load an image dataURL onto a canvas ----
@@ -926,6 +1040,219 @@
     if(/三聯|買受人統一編號/.test(norm) || o.buyerTax.v) o.type = f('三聯式','mid');
   }
 
+  // ================= Expense Application =================
+  const DEPTS = ['業務部','採購部','倉儲物流部','行銷企劃部','租賃服務部','財務部','行政總務'];
+  const EXPENSE_CATEGORIES = [
+    '進貨成本／採購費','進口報關／關稅／檢驗費','倉儲／冷藏費','運輸／物流費',
+    '設備採購／維修保養費','場地／展示會／試飲活動費','樣品／招待費','差旅費',
+    '佣金／仲介費','保險費','廣告行銷費','文具用品／辦公用品','水電瓦斯費','通訊費','其他',
+  ];
+  const VOUCHER_TYPES = ['電子發票（二聯式）','電子發票（三聯式）','收據','國外發票','無單據（請加註原因）'];
+
+  let expenseItemCounter = 0;
+  function newExpenseItem(){
+    expenseItemCounter++;
+    return { id:expenseItemCounter, category:EXPENSE_CATEGORIES[0], voucherType:VOUCHER_TYPES[0], reason:'', qty:1, unitPrice:0, amount:0, linkedInvoiceIdx:null };
+  }
+  let expenseDraft = { items:[newExpenseItem()] };
+  let expenseAppCounter = 0;
+  const expenseApps = [];
+  let pendingExpenseAttach = null; // 記錄目前是哪一列費用項目按了「掃描/上傳憑證」，等發票審核完成後要回填
+
+  function renderExpenseForm(){
+    const deptSel = document.getElementById('exp_dept');
+    if(!deptSel.options.length) deptSel.innerHTML = DEPTS.map(d=>`<option>${d}</option>`).join('');
+
+    const body = document.getElementById('expenseItemsBody');
+    body.innerHTML = expenseDraft.items.map((it, idx)=>`
+      <tr data-row-id="${it.id}">
+        <td>${idx+1}</td>
+        <td><select data-field="category" data-id="${it.id}">${EXPENSE_CATEGORIES.map(c=>`<option ${c===it.category?'selected':''}>${c}</option>`).join('')}</select></td>
+        <td><select data-field="voucherType" data-id="${it.id}">${VOUCHER_TYPES.map(v=>`<option ${v===it.voucherType?'selected':''}>${v}</option>`).join('')}</select></td>
+        <td><input data-field="reason" data-id="${it.id}" value="${escapeHtml(it.reason)}" placeholder="例如：清酒樣品採購"></td>
+        <td><input type="number" min="0" style="width:64px" data-field="qty" data-id="${it.id}" value="${it.qty}"></td>
+        <td><input type="number" min="0" style="width:90px" data-field="unitPrice" data-id="${it.id}" value="${it.unitPrice}"></td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;" class="item-amount">${it.amount.toLocaleString()}</td>
+        <td>${it.linkedInvoiceIdx!=null
+          ? `<span class="badge b-green">✓ ${escapeHtml(invoices[it.linkedInvoiceIdx].no)}</span>`
+          : `<button class="btn btn-outline btn-sm" data-attach="${it.id}">掃描/上傳</button>`}</td>
+        <td><button class="btn btn-red btn-sm" data-remove="${it.id}" title="刪除">✕</button></td>
+      </tr>
+    `).join('');
+    updateExpenseTotal();
+  }
+
+  function updateExpenseTotal(){
+    document.getElementById('expenseTotal').textContent = expenseDraft.items.reduce((s,i)=>s+(i.amount||0),0).toLocaleString();
+  }
+
+  const expenseItemsBody = document.getElementById('expenseItemsBody');
+  expenseItemsBody.addEventListener('input', handleExpenseFieldChange);
+  expenseItemsBody.addEventListener('change', handleExpenseFieldChange);
+  function handleExpenseFieldChange(e){
+    const el = e.target;
+    const field = el.dataset.field;
+    if(!field) return;
+    const item = expenseDraft.items.find(i=>i.id===parseInt(el.dataset.id,10));
+    if(!item) return;
+    if(field==='qty' || field==='unitPrice'){
+      item[field] = parseFloat(el.value)||0;
+      item.amount = Math.round(item.qty * item.unitPrice);
+      const row = el.closest('tr');
+      row.querySelector('.item-amount').textContent = item.amount.toLocaleString();
+      updateExpenseTotal();
+    } else {
+      item[field] = el.value;
+    }
+  }
+  expenseItemsBody.addEventListener('click', e=>{
+    const attachBtn = e.target.closest('[data-attach]');
+    const removeBtn = e.target.closest('[data-remove]');
+    if(attachBtn){
+      pendingExpenseAttach = parseInt(attachBtn.dataset.attach,10);
+      toast('請選擇這筆費用要附上的發票照片／檔案');
+      fileInput.click();
+    }
+    if(removeBtn){
+      const id = parseInt(removeBtn.dataset.remove,10);
+      expenseDraft.items = expenseDraft.items.filter(i=>i.id!==id);
+      if(!expenseDraft.items.length) expenseDraft.items.push(newExpenseItem());
+      renderExpenseForm();
+    }
+  });
+
+  document.getElementById('btnAddExpenseRow').addEventListener('click', ()=>{
+    expenseDraft.items.push(newExpenseItem());
+    renderExpenseForm();
+  });
+  document.getElementById('btnExpenseDraftSave').addEventListener('click', ()=> toast('已存為草稿（示意，尚未串接後端儲存）'));
+
+  document.getElementById('btnExpenseSubmit').addEventListener('click', ()=>{
+    const name = document.getElementById('exp_name').value.trim();
+    if(!name){ toast('請填寫申請人姓名'); return; }
+    const validItems = expenseDraft.items.filter(i=> i.reason.trim() || i.amount>0);
+    if(!validItems.length){ toast('請至少填寫一筆費用項目（項目名稱或金額擇一即可）'); return; }
+
+    expenseAppCounter++;
+    const app = {
+      id: 'EXP-'+String(expenseAppCounter).padStart(4,'0'),
+      dept: document.getElementById('exp_dept').value,
+      title: document.getElementById('exp_title').value.trim() || '(未填)',
+      name,
+      date: document.getElementById('exp_date').value || '(未填)',
+      status: '待簽核',
+      items: expenseDraft.items.map(i=>({...i})),
+    };
+    expenseApps.push(app);
+
+    expenseDraft = { items:[newExpenseItem()] };
+    document.getElementById('exp_title').value = '';
+    document.getElementById('exp_name').value = '';
+    renderExpenseForm();
+    renderExpenseAppsList();
+    renderExpenseApprovalList();
+    toast('已送出申請單 '+app.id+'，等候主管審核');
+    goPage('approval');
+  });
+
+  function renderExpenseAppsList(){
+    const body = document.getElementById('expenseAppsListBody');
+    if(!expenseApps.length){
+      body.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px;">尚未送出任何申請單</td></tr>';
+      return;
+    }
+    body.innerHTML = expenseApps.map(app=>{
+      const total = app.items.reduce((s,i)=>s+i.amount,0);
+      return `<tr>
+        <td>${app.id}</td><td>${escapeHtml(app.date)}</td><td>${escapeHtml(app.name)}</td>
+        <td>${app.items.length}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">NT$ ${total.toLocaleString()}</td>
+        <td><span class="badge ${badgeMap[app.status]||'b-gray'}">${app.status}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderExpenseApprovalList(){
+    const container = document.getElementById('expenseApprovalList');
+    const pending = expenseApps.filter(a=>a.status==='待簽核');
+    if(!pending.length){
+      container.innerHTML = '<p style="color:var(--muted);font-size:13px;">目前沒有待簽核的費用申請單。</p>';
+      return;
+    }
+    container.innerHTML = pending.map(app=>{
+      const total = app.items.reduce((s,i)=>s+i.amount,0);
+      const itemsHtml = app.items.map(i=>`
+        <tr>
+          <td>${escapeHtml(i.category)}</td><td>${escapeHtml(i.reason)||'-'}</td>
+          <td style="text-align:right">${i.qty}</td>
+          <td style="text-align:right">${i.unitPrice.toLocaleString()}</td>
+          <td style="text-align:right">${i.amount.toLocaleString()}</td>
+          <td>${i.linkedInvoiceIdx!=null ? '✓ 已附發票' : '—'}</td>
+        </tr>`).join('');
+      return `
+        <div class="approval-card" data-expense-id="${app.id}">
+          <div class="approval-top">
+            <div class="info">
+              <b>${app.id} ・ ${escapeHtml(app.name)}（${escapeHtml(app.dept)} / ${escapeHtml(app.title)}）</b>
+              <div class="meta">申請日期：${escapeHtml(app.date)}・共 ${app.items.length} 筆項目</div>
+              ${total>50000 ? '<div class="threshold-tag">＞NT$50,000　需 CFO 覆核</div>' : ''}
+            </div>
+            <div class="amount">NT$ ${total.toLocaleString()}</div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="margin:12px 0;font-size:12px;">
+              <thead><tr><th>類別</th><th>項目</th><th>數量</th><th>單價</th><th>金額</th><th>憑證</th></tr></thead>
+              <tbody>${itemsHtml}</tbody>
+            </table>
+          </div>
+          <div class="approval-btns">
+            <button class="btn btn-green btn-sm expense-approve-btn" data-id="${app.id}">✓ 核准</button>
+            <button class="btn btn-red btn-sm expense-reject-btn" data-id="${app.id}">✕ 退回</button>
+          </div>
+          <textarea class="reject-note" placeholder="請填寫退回原因..."></textarea>
+        </div>`;
+    }).join('');
+    container.querySelectorAll('.expense-approve-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+      const app = expenseApps.find(a=>a.id===btn.dataset.id);
+      app.status = '已核准';
+      renderExpenseApprovalList();
+      renderExpenseAppsList();
+      toast('已核准 '+app.id);
+    }));
+    container.querySelectorAll('.expense-reject-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+      const card = btn.closest('.approval-card');
+      const note = card.querySelector('.reject-note');
+      if(note.style.display === 'block'){
+        const app = expenseApps.find(a=>a.id===btn.dataset.id);
+        app.status = '已退回';
+        renderExpenseApprovalList();
+        renderExpenseAppsList();
+        toast('已退回 '+app.id);
+      } else {
+        note.style.display = 'block';
+        note.focus();
+      }
+    }));
+  }
+
+  function exportExpenseCsv(){
+    const approved = expenseApps.filter(a=>a.status==='已核准');
+    const header = ['申請單號','申請日期','部門','姓名','職稱','費用類別','憑證類別','項目/理由','數量','單價','金額'];
+    const rows = [];
+    approved.forEach(app=> app.items.forEach(it=>{
+      rows.push([app.id, app.date, app.dept, app.name, app.title, it.category, it.voucherType, it.reason, it.qty, it.unitPrice, it.amount]);
+    }));
+    const csv = '﻿' + [header, ...rows].map(r=>r.map(v=>String(v).replace(/,/g,'，')).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'expense_export.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('已產生費用申請 CSV 並下載（'+approved.length+' 張申請單、'+rows.length+' 筆項目）');
+  }
+  document.getElementById('btnExportExpenseCsv').addEventListener('click', exportExpenseCsv);
+
   // ================= Approval actions =================
   document.querySelectorAll('.approve-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -961,6 +1288,10 @@
 
   // ================= Init =================
   renderTable();
+  document.getElementById('exp_date').valueAsDate = new Date();
+  renderExpenseForm();
+  renderExpenseAppsList();
+  renderExpenseApprovalList();
 </script>
 </body>
 </html>
