@@ -320,7 +320,7 @@
           <div class="field-group">
             <h4>會計歸屬</h4>
             <div class="field-row"><label style="width:110px">會計科目</label>
-              <select id="acc_code"><option>印刷費</option><option>廣告費</option><option>文具用品</option><option>水電費</option><option>通訊費</option><option>其他費用</option></select>
+              <select id="acc_code"><option>交通費</option><option>印刷費</option><option>廣告費</option><option>文具用品</option><option>水電費</option><option>通訊費</option><option>差旅費</option><option>其他費用</option></select>
             </div>
             <div class="field-row"><label style="width:110px">部門</label>
               <select id="acc_dept"><option>行銷部</option><option>行政總務</option><option>資訊部</option></select>
@@ -545,6 +545,41 @@
       <div class="card">
         <h3>六項關鍵異常檢查</h3>
         <div id="closingChecks"></div>
+      </div>
+
+      <div class="kpi-row" id="arSummaryRow"></div>
+
+      <div class="card">
+        <h3>應收帳款帳齡分析</h3>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">依到期日計算帳齡；逾期超過 180 天者，依政策自動列為呆帳風險。</p>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>客戶</th><th>發票／單號</th><th>到期日</th><th style="text-align:right">金額</th><th style="text-align:right">逾期天數</th><th>帳齡區間</th><th>狀態</th></tr></thead>
+            <tbody id="arAgingBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>年度折現表（現金流量折現，DCF）</h3>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;">
+          <div>
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">年化折現率 (%)</label>
+            <input type="number" id="discountRate" value="6" min="0" max="50" step="0.5" style="width:100px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;">
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:18px;">折現率代表資金的時間成本；越晚收到的錢，現值越低。</div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>年度</th><th style="text-align:right">預估淨現金流</th><th style="text-align:right">折現因子</th><th style="text-align:right">折現值(現值)</th><th style="text-align:right">累計現值</th></tr></thead>
+            <tbody id="dcfBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>AI CFO 建議意見</h3>
+        <div id="aiCfoAdvice"></div>
       </div>
 
       <div class="card">
@@ -935,6 +970,12 @@
       banner.innerHTML = `<div class="review-banner warn">◐ 有 ${midCount} 項欄位信心中等（黃點），建議再次確認。</div>`;
     } else {
       banner.innerHTML = `<div class="review-banner ok">✓ 所有欄位辨識信心良好，可直接送出審核。</div>`;
+    }
+
+    // 如果辨識過程判斷出這可能是車票／交通類憑證，自動把會計科目帶到「交通費」，不用每次手動選
+    const accCodeSel = document.getElementById('acc_code');
+    if(inv.suggestedCategory && [...accCodeSel.options].some(o=>o.value===inv.suggestedCategory)){
+      accCodeSel.value = inv.suggestedCategory;
     }
 
     goPage('review');
@@ -1359,6 +1400,57 @@
     inv.type = inv.ocr.type.v;
   }
 
+  // 一張照片裡偵測到不只一張憑證時，其餘幾張各自複製一筆新記錄（共用同一張來源照片），
+  // 回傳新記錄本身，讓呼叫端自行套上各自的辨識結果
+  function spawnSiblingInvoice(baseInv){
+    uploadCounter++;
+    const clone = {
+      no:'待辨識-'+String(uploadCounter).padStart(3,'0'), date:'-', vendor:'（處理中…）', type:'-', amount:0, status:'待確認',
+      image: baseInv.image, fileType: baseInv.fileType, fileName: baseInv.fileName, ocr: emptyOcr(),
+    };
+    invoices.push(clone);
+    return clone;
+  }
+
+  // 文字OCR沒有QR那種天然的「一組資料一定屬於同一張」的邊界，只能靠版面猜：
+  // 如果整段辨識文字裡「總計/合計/票價」這類金額關鍵字出現兩次以上，很可能是好幾張憑證疊在一起拍，
+  // 這時才「額外」把照片切成幾欄/幾列分別重新辨識一次（多花時間，所以只有偵測到訊號才做）。
+  async function trySplitMultiReceiptOcr(canvas, fullText){
+    // 必須先把 Tesseract 在中文字之間誤插的空白清掉（"總 計" → "總計"），否則這裡永遠比對不到關鍵字
+    const normText = collapseCjkGaps(fullText.replace(/[ \t]+/g,' '));
+    const signalCount = (normText.match(/(總計|合計|應付金額|實收金額|票價|全票|車資)[:：]?\s*\$?[\d,]{2,}/g) || []).length;
+    if(signalCount < 2) return null;
+
+    const worker = await getOcrWorker();
+    async function ocrRegion(r){
+      const tile = document.createElement('canvas');
+      tile.width = r.w; tile.height = r.h;
+      tile.getContext('2d').drawImage(canvas, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+      const processed = preprocessForOcr(tile);
+      const res = await worker.recognize(processed.toDataURL('image/png'));
+      return ((res && res.data && res.data.text) || '').trim();
+    }
+    async function tryLayout(regions){
+      // 逐格依序辨識，不用 Promise.all 並行——共用同一個 Tesseract worker，並行只會互相排隊還更慢
+      const texts = [];
+      for(let i=0;i<regions.length;i++){
+        setProgressLabel(`切開後逐格辨識中… (${i+1}/${regions.length})`);
+        texts.push(await ocrRegion(regions[i]));
+      }
+      return texts.filter(t=> t.length>3 && /\d/.test(t));
+    }
+    const w = canvas.width, h = canvas.height;
+    const cols3 = [ {x:0,y:0,w:Math.floor(w/3),h}, {x:Math.floor(w/3),y:0,w:Math.floor(w/3),h}, {x:Math.floor(w*2/3),y:0,w:w-Math.floor(w*2/3),h} ];
+    const rows3 = [ {x:0,y:0,w,h:Math.floor(h/3)}, {x:0,y:Math.floor(h/3),w,h:Math.floor(h/3)}, {x:0,y:Math.floor(h*2/3),w,h:h-Math.floor(h*2/3)} ];
+
+    setProgressLabel(`偵測到可能有 ${signalCount} 張憑證疊在一起，嘗試切開分別辨識…`);
+    setProgressIndeterminate();
+    const colTexts = await tryLayout(cols3);
+    const rowTexts = colTexts.length>=2 ? [] : await tryLayout(rows3); // 直欄已經夠用就不用浪費時間再試橫列
+    const chosen = colTexts.length >= rowTexts.length ? colTexts : rowTexts;
+    return chosen.length>=2 ? chosen : null;
+  }
+
   async function runOcr(inv, idx){
     inv.status = '辨識中';
     renderTable();
@@ -1375,18 +1467,10 @@
         // 一張照片裡偵測到多張發票：第一筆沿用目前這筆記錄，其餘各自建立新記錄（共用同一張來源照片）
         applyQrResultToInvoice(inv, qrResults[0]);
         finalizeInvoiceFields(inv);
-        const newIndexes = [idx];
         for(let k=1; k<qrResults.length; k++){
-          uploadCounter++;
-          const clone = {
-            no:'待辨識-'+String(uploadCounter).padStart(3,'0'), date:'-', vendor:'（處理中…）', type:'-', amount:0, status:'待確認',
-            image: inv.image, fileType: inv.fileType, fileName: inv.fileName, ocr: emptyOcr(),
-          };
-          const newIdx = invoices.length;
-          invoices.push(clone);
+          const clone = spawnSiblingInvoice(inv);
           applyQrResultToInvoice(clone, qrResults[k]);
           finalizeInvoiceFields(clone);
-          newIndexes.push(newIdx);
         }
         renderTable();
         setProgressPercent(100);
@@ -1420,6 +1504,26 @@
         }
         const text = (result && result.data && result.data.text) || '';
         inv.rawOcrText = text.trim() || '（引擎未辨識出任何文字，圖片可能過模糊或角度過斜）';
+
+        // 沒有QR的紙本憑證（車票、收據等）也可能好幾張拍在同一張照片裡，嘗試切開分別辨識
+        const splitTexts = await trySplitMultiReceiptOcr(canvas, text);
+        if(splitTexts && splitTexts.length >= 2){
+          inv.rawOcrText = splitTexts[0];
+          applyRegexExtraction(inv, splitTexts[0]);
+          finalizeInvoiceFields(inv);
+          for(let k=1; k<splitTexts.length; k++){
+            const clone = spawnSiblingInvoice(inv);
+            clone.rawOcrText = splitTexts[k];
+            applyRegexExtraction(clone, splitTexts[k]);
+            finalizeInvoiceFields(clone);
+          }
+          renderTable();
+          setProgressPercent(100);
+          toast(`這張照片偵測到 ${splitTexts.length} 張憑證，已各自建立成 ${splitTexts.length} 筆記錄，請用「上一筆／下一筆」逐一核對`);
+          openReview(idx);
+          return;
+        }
+
         applyRegexExtraction(inv, text);
       }
     } catch(err){
@@ -1462,8 +1566,10 @@
     if(m = norm.match(/隨機碼[:：]?\s*(\d{4})/)){ o.randomCode = f(m[1], 'mid'); used.add(m[1]); }
 
     if(m = norm.match(/賣方[:：]?\s*(\d{8})/)){ o.sellerTax = f(m[1], 'mid'); used.add(m[1]); }
-    if(m = norm.match(/買方[:：]?\s*(\d{8})/) || norm.match(/買受人(?:統一編號)?[:：]?\s*(\d{8})/)){ o.buyerTax = f(m[1], 'mid'); used.add(m[1]); }
-    // 找不到「賣方:」「買方:」標籤時，才退回用裸8碼數字猜測（信心度較低）
+    let buyerTaxFromLabel = false;
+    if(m = norm.match(/買方[:：]?\s*(\d{8})/) || norm.match(/買受人(?:統一編號)?[:：]?\s*(\d{8})/)){ o.buyerTax = f(m[1], 'mid'); used.add(m[1]); buyerTaxFromLabel = true; }
+    // 找不到「賣方:」「買方:」標籤時，才退回用裸8碼數字猜測（信心度較低）——這種猜測不能拿來判斷二聯/三聯，
+    // 否則感熱紙上任何一組不相干的8碼數字（電話、條碼片段）都可能把明明是二聯式的發票誤判成三聯式
     if(!o.sellerTax.v || !o.buyerTax.v){
       const taxIds = [...norm.matchAll(/(?<!\d)\d{8}(?!\d)/g)].map(x=>x[0]).filter(id => !used.has(id));
       if(!o.sellerTax.v && taxIds[0]){ o.sellerTax = f(taxIds[0], 'low'); used.add(taxIds[0]); }
@@ -1483,13 +1589,30 @@
     if(sales) o.sales = f(sales, 'mid');
     if(tax) o.tax = f(tax, 'mid');
     if(total) o.total = f(total, 'mid');
+    // 只抓得到總金額、抓不到銷售額/稅額時，用應稅5%的公式反推——總金額 = 銷售額 x 1.05，
+    // 反推出來的兩個數字終究是用猜的，維持低信心，仍要求人工核對
+    if(total && !sales && !tax){
+      const totalNum = parseFloat(total.replace(/,/g,''));
+      if(!isNaN(totalNum)){
+        const salesCalc = Math.round(totalNum / 1.05);
+        const taxCalc = totalNum - salesCalc;
+        o.sales = f(salesCalc.toLocaleString(), 'low');
+        o.tax = f(taxCalc.toLocaleString(), 'low');
+      }
+    }
     // 三個標籤都找不到才整段放棄——寧可留白讓人工輸入，也不要用「猜最大的幾個數字」這種不可靠的方式帶出金額
 
     const lines = norm.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
     const nameLine = lines.find(l=>/(公司|行號|有限公司|股份|商店|企業|工廠|商行|之家)/.test(l) && l.length<=24);
     if(nameLine) o.sellerName = f(nameLine, 'mid');
-    // 只要抓到買方/買受人統編（二聯式消費發票本來就不會印這欄），就代表是三聯式，不必等到文字裡剛好出現「三聯」字樣
-    if(/三聯|買受人統一編號/.test(norm) || o.buyerTax.v) o.type = f('三聯式','mid');
+    // 只有「買方:」「買受人:」這種有明確標籤的統編才能拿來判斷三聯式；沒標籤瞎猜出來的8碼數字不算數，
+    // 這樣二聯式發票在讀不到買家統編時，就會維持預設的二聯式判斷，不會被雜訊誤判成三聯式
+    if(/三聯|買受人統一編號/.test(norm) || buyerTaxFromLabel) o.type = f('三聯式','mid');
+
+    // 車票／交通類憑證：偵測到相關關鍵字時，建議會計科目直接歸類到「交通費」，不用每次手動選
+    if(/(車票|台鐵|高鐵|客運|計程車|捷運|公車|停車費|回數票|悠遊卡|一卡通)/.test(norm)){
+      inv.suggestedCategory = '交通費';
+    }
   }
 
   // ================= Expense Application =================
@@ -1526,6 +1649,34 @@
   const payments = []; // { id, appId, amount, date, postedToLedger }
   let paymentCounter = 0;
   const closedMonths = new Set(); // 'YYYY-MM'，已鎖定月結的月份
+
+  // 應收帳款（清酒代理／器材租賃的下游客戶賒帳），dueDate 為到期日；paid=已收款
+  const receivables = [
+    { customer:'誠品生活南西店',   docNo:'AR-2026-0031', amount:128000, dueDate:'2026/08/20', paid:false },
+    { customer:'新光三越信義店',   docNo:'AR-2026-0028', amount:96000,  dueDate:'2026/07/25', paid:false },
+    { customer:'漢神百貨',         docNo:'AR-2026-0022', amount:54000,  dueDate:'2026/06/30', paid:false },
+    { customer:'私廚居酒屋（中山）', docNo:'AR-2026-0015', amount:38000,  dueDate:'2026/05/12', paid:false },
+    { customer:'和牛燒肉專門店',   docNo:'AR-2026-0009', amount:26000,  dueDate:'2026/02/10', paid:false },
+    { customer:'已歇業：初鮨割烹',  docNo:'AR-2025-0142', amount:73000,  dueDate:'2025/11/05', paid:false },
+    { customer:'微風廣場',         docNo:'AR-2026-0035', amount:112000, dueDate:'2026/09/15', paid:false },
+    { customer:'大直英迪格酒店',   docNo:'AR-2026-0026', amount:88000,  dueDate:'2026/08/01', paid:true  },
+  ];
+  const BAD_DEBT_DAYS = 180; // 逾期超過此天數列為呆帳風險
+
+  function daysOverdue(dueDateStr, refDate){
+    const m = String(dueDateStr).match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if(!m) return 0;
+    const due = new Date(+m[1], +m[2]-1, +m[3]);
+    return Math.floor((refDate - due) / 86400000);
+  }
+  function agingBucket(days){
+    if(days <= 0) return '未到期';
+    if(days <= 30) return '1–30天';
+    if(days <= 60) return '31–60天';
+    if(days <= 90) return '61–90天';
+    if(days <= 180) return '91–180天';
+    return '180天以上';
+  }
 
   function mockItem(overrides){
     return Object.assign(newExpenseItem(), { needsVerification: VERIFY_BY_DEFAULT.has(overrides.category), verified:true }, overrides);
@@ -2090,6 +2241,126 @@
         <span class="badge ${c.count>0?'b-red':'b-green'}">${c.count>0?c.count+' 筆':'正常'}</span>
         <div><div class="t1">${c.label}</div>${c.count>0?`<div class="t2">${escapeHtml(c.detail)}</div>`:''}</div>
       </div>`).join('');
+
+    const ar = renderReceivables(month);
+    renderDcfTable(ar);
+    renderAiCfoAdvice(month, checks, ar);
+  }
+
+  // ---- 應收 / 未收 / 呆帳 ----
+  function computeReceivables(month){
+    // 以結算月份的月底當作基準日計算帳齡
+    const m = String(month).match(/(\d{4})-(\d{2})/);
+    const refDate = m ? new Date(+m[1], +m[2], 0) : new Date();
+    const rows = receivables.map(r=>{
+      const days = daysOverdue(r.dueDate, refDate);
+      const overdue = !r.paid && days > 0;
+      const badDebt = !r.paid && days > BAD_DEBT_DAYS;
+      return { ...r, days, bucket: agingBucket(days), overdue, badDebt };
+    });
+    const totalAR = rows.filter(r=>!r.paid).reduce((s,r)=>s+r.amount,0);
+    const overdueAR = rows.filter(r=>r.overdue && !r.badDebt).reduce((s,r)=>s+r.amount,0);
+    const badDebtAR = rows.filter(r=>r.badDebt).reduce((s,r)=>s+r.amount,0);
+    const collectedAR = rows.filter(r=>r.paid).reduce((s,r)=>s+r.amount,0);
+    return { rows, totalAR, overdueAR, badDebtAR, collectedAR, refDate };
+  }
+  function renderReceivables(month){
+    const ar = computeReceivables(month);
+    document.getElementById('arSummaryRow').innerHTML = `
+      <div class="kpi-card"><div class="label">應收帳款總額 <span class="badge b-blue">未收</span></div><div class="value">NT$ ${ar.totalAR.toLocaleString()}</div><div class="sub">尚未收款之總額</div></div>
+      <div class="kpi-card ${ar.overdueAR?'warn':''}"><div class="label">逾期未收 <span class="badge b-amber">逾期</span></div><div class="value">NT$ ${ar.overdueAR.toLocaleString()}</div><div class="sub">已過到期日、未達呆帳門檻</div></div>
+      <div class="kpi-card ${ar.badDebtAR?'warn':''}"><div class="label">呆帳風險 <span class="badge b-red">＞180天</span></div><div class="value">NT$ ${ar.badDebtAR.toLocaleString()}</div><div class="sub">建議提列備抵呆帳</div></div>
+      <div class="kpi-card"><div class="label">本期已收款 <span class="badge b-green">已收</span></div><div class="value">NT$ ${ar.collectedAR.toLocaleString()}</div><div class="sub">已完成收款</div></div>
+    `;
+    document.getElementById('arAgingBody').innerHTML = ar.rows.map(r=>`
+      <tr>
+        <td>${escapeHtml(r.customer)}</td>
+        <td>${escapeHtml(r.docNo)}</td>
+        <td>${escapeHtml(r.dueDate)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.amount.toLocaleString()}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.paid ? '—' : (r.days>0 ? r.days : '未到期')}</td>
+        <td>${escapeHtml(r.bucket)}</td>
+        <td>${r.paid ? '<span class="badge b-green">已收款</span>' : (r.badDebt ? '<span class="badge b-red">呆帳風險</span>' : (r.overdue ? '<span class="badge b-amber">逾期未收</span>' : '<span class="badge b-blue">未到期</span>'))}</td>
+      </tr>`).join('');
+    return ar;
+  }
+
+  // ---- 年度折現表（DCF） ----
+  function renderDcfTable(ar){
+    const rate = (parseFloat(document.getElementById('discountRate').value) || 0) / 100;
+    // 以目前已核准費用與應收帳款推估基準年淨現金流，之後年度以溫和成長假設外推（示範用簡化模型）
+    const approvedExpense = expenseApps.filter(a=>a.status==='已核准').reduce((s,a)=>s+a.items.reduce((x,i)=>x+i.amount,0),0);
+    const baseInflow = ar.totalAR - ar.badDebtAR; // 呆帳部分不計入可回收現金
+    const baseNet = Math.max(0, baseInflow - approvedExpense);
+    const growth = 0.05;
+    let cumulative = 0;
+    const rows = [];
+    for(let y=1; y<=5; y++){
+      const cash = Math.round(baseNet * Math.pow(1+growth, y-1));
+      const factor = 1 / Math.pow(1+rate, y);
+      const pv = Math.round(cash * factor);
+      cumulative += pv;
+      rows.push({ year:y, cash, factor, pv, cumulative });
+    }
+    document.getElementById('dcfBody').innerHTML = rows.map(r=>`
+      <tr>
+        <td>第 ${r.year} 年</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.cash.toLocaleString()}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.factor.toFixed(4)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.pv.toLocaleString()}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.cumulative.toLocaleString()}</td>
+      </tr>`).join('') +
+      `<tr style="font-weight:700;"><td colspan="4">五年累計淨現值 (NPV)</td><td style="text-align:right;font-variant-numeric:tabular-nums;">${rows[rows.length-1].cumulative.toLocaleString()}</td></tr>`;
+  }
+  document.getElementById('discountRate').addEventListener('input', ()=>{
+    const month = document.getElementById('closingMonth').value;
+    renderDcfTable(computeReceivables(month));
+  });
+
+  // ---- AI CFO 建議意見（依實際資料產生，不是固定文案） ----
+  function renderAiCfoAdvice(month, checks, ar){
+    const advices = [];
+    if(ar.badDebtAR > 0){
+      const pct = ar.totalAR ? Math.round(ar.badDebtAR/ar.totalAR*100) : 0;
+      advices.push({ level:'high', title:`呆帳風險 NT$ ${ar.badDebtAR.toLocaleString()}（占應收 ${pct}%）`,
+        body:'建議本月即提列備抵呆帳，並停止對這些客戶出貨；逾期超過180天多半已難以全額收回，越晚認列對損益衝擊越集中。' });
+    }
+    if(ar.overdueAR > 0){
+      advices.push({ level:'mid', title:`逾期未收 NT$ ${ar.overdueAR.toLocaleString()}`,
+        body:'建議立即發出對帳單與催收通知，並檢討這些客戶的信用額度；清酒與器材租賃屬低毛利高周轉，收款延遲會直接壓縮進貨資金。' });
+    }
+    const missingVoucher = checks.find(c=>c.label.includes('缺憑證'));
+    if(missingVoucher && missingVoucher.count>0){
+      advices.push({ level:'high', title:`${missingVoucher.count} 筆費用缺憑證`,
+        body:'缺憑證的支出無法列報營業費用，也不能扣抵進項稅額。建議月結前完成補件，否則須轉列為不可扣抵並調整稅務申報。' });
+    }
+    const missingVerify = checks.find(c=>c.label.includes('未完成驗收'));
+    if(missingVerify && missingVerify.count>0){
+      advices.push({ level:'mid', title:`${missingVerify.count} 筆未完成驗收`,
+        body:'未驗收即付款是內控上的重大缺口。建議維持「核准＋憑證＋驗收」三條件到齊才付款的規則，不要因趕結帳而破例。' });
+    }
+    const dupCheck = checks.find(c=>c.label.includes('重複'));
+    if(dupCheck && dupCheck.count>0){
+      advices.push({ level:'high', title:`偵測到 ${dupCheck.count} 筆重複發票`,
+        body:'重複發票是最常見的重複付款來源，請於付款前逐筆確認，避免同一張憑證被報支兩次。' });
+    }
+    const calcCheck = checks.find(c=>c.label.includes('金額試算不符'));
+    if(calcCheck && calcCheck.count>0){
+      advices.push({ level:'mid', title:`${calcCheck.count} 筆金額試算不符`,
+        body:'銷售額與稅額不符5%關係，可能是辨識誤差或發票本身有誤。建議與原始憑證核對，避免營業稅申報產生差異。' });
+    }
+    if(!advices.length){
+      advices.push({ level:'ok', title:'本月未發現重大財務風險',
+        body:'各項異常檢查皆正常、應收帳款無逾期。建議維持現行內控節奏，並持續留意大額客戶的收款狀況。' });
+    }
+    const badge = l=> l==='high' ? '<span class="badge b-red">高度關注</span>' : l==='mid' ? '<span class="badge b-amber">建議處理</span>' : '<span class="badge b-green">狀況良好</span>';
+    document.getElementById('aiCfoAdvice').innerHTML =
+      `<p style="font-size:11px;color:var(--muted);margin:0 0 12px;">以下建議由系統依當月實際資料自動產生，僅供管理參考，不構成正式財稅或投資建議；實際帳務處理請與您的會計師確認。</p>` +
+      advices.map(a=>`
+        <div class="alert-item">
+          ${badge(a.level)}
+          <div><div class="t1">${escapeHtml(a.title)}</div><div class="t2">${escapeHtml(a.body)}</div></div>
+        </div>`).join('');
   }
   document.getElementById('closingMonth').addEventListener('change', renderClosingPage);
   document.getElementById('btnToggleCloseMonth').addEventListener('click', ()=>{
