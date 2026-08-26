@@ -704,19 +704,43 @@
 
   // 手機拍照角度、遠近、光線都不一樣，jsQR 對整張大圖不一定能一次找到 QR，
   // 所以对原圖與縮小版各自嘗試「整張／左半／右半／置中裁切」幾種常見的QR落點
+  // 基本裁切（整張／左右／置中）——每個尺度都會試
+  function basicRegions(width, height){
+    return [
+      { x:0, y:0, w:width, h:height },
+      { x:0, y:0, w:Math.ceil(width*0.6), h:height },
+      { x:Math.floor(width*0.4), y:0, w:Math.ceil(width*0.6), h:height },
+      { x:Math.floor(width*0.1), y:Math.floor(height*0.1), w:Math.ceil(width*0.8), h:Math.ceil(height*0.8) },
+    ];
+  }
+  // 加碼裁切（上下＋四個角落）——手機拍照時QR常常偏在畫面某一角，只在較小尺度嘗試（運算量低，划得來）
+  function extraRegions(width, height){
+    return [
+      { x:0, y:0, w:width, h:Math.ceil(height*0.6) },
+      { x:0, y:Math.floor(height*0.4), w:width, h:Math.ceil(height*0.6) },
+      { x:0, y:0, w:Math.ceil(width*0.65), h:Math.ceil(height*0.65) },
+      { x:Math.floor(width*0.35), y:0, w:Math.ceil(width*0.65), h:Math.ceil(height*0.65) },
+      { x:0, y:Math.floor(height*0.35), w:Math.ceil(width*0.65), h:Math.ceil(height*0.65) },
+      { x:Math.floor(width*0.35), y:Math.floor(height*0.35), w:Math.ceil(width*0.65), h:Math.ceil(height*0.65) },
+    ];
+  }
+
+  // 手機拍照角度、遠近、QR在畫面裡的相對大小落差很大，jsQR 不會自動做多尺度搜尋，
+  // 所以我們自己對原圖＋兩種縮小版本，各自嘗試多種常見裁切範圍，盡量涵蓋「QR只占畫面一小塊、偏某一角」的情況
   async function tryDecodeInvoiceQr(canvas){
     if(typeof jsQR === 'undefined') return null;
-    const candidates = [canvas, scaleCanvas(canvas, 1000)].filter((c,i,arr)=> i===0 || c.width!==arr[0].width);
-
-    for(const cv of candidates){
+    const scales = [
+      { cv: canvas, extra:false },
+      { cv: scaleCanvas(canvas, 1400), extra:true },
+      { cv: scaleCanvas(canvas, 800), extra:true },
+    ];
+    const seen = new Set();
+    for(const { cv, extra } of scales){
+      if(seen.has(cv.width)) continue;
+      seen.add(cv.width);
       const ctx = cv.getContext('2d');
       const { width, height } = cv;
-      const regions = [
-        { x:0, y:0, w:width, h:height },                                   // 整張
-        { x:0, y:0, w:Math.ceil(width*0.6), h:height },                    // 左半（發票財政部QR多半在左）
-        { x:Math.floor(width*0.4), y:0, w:Math.ceil(width*0.6), h:height },// 右半
-        { x:Math.floor(width*0.15), y:Math.floor(height*0.15), w:Math.ceil(width*0.7), h:Math.ceil(height*0.7) }, // 置中裁切，排除四周雜物
-      ];
+      const regions = extra ? basicRegions(width,height).concat(extraRegions(width,height)) : basicRegions(width,height);
       for(const r of regions){
         let imgData;
         try{ imgData = ctx.getImageData(r.x, r.y, r.w, r.h); } catch(e){ continue; }
