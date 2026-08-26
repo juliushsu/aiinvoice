@@ -898,7 +898,8 @@
     const lines = norm.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
     const nameLine = lines.find(l=>/(公司|行號|有限公司|股份|商店|企業|工廠|商行|之家)/.test(l) && l.length<=24);
     if(nameLine) o.sellerName = f(nameLine, 'mid');
-    if(/三聯|買受人統一編號/.test(norm)) o.type = f('三聯式','mid');
+    // 只要抓到買方/買受人統編（二聯式消費發票本來就不會印這欄），就代表是三聯式，不必等到文字裡剛好出現「三聯」字樣
+    if(/三聯|買受人統一編號/.test(norm) || o.buyerTax.v) o.type = f('三聯式','mid');
   }
 
   // ================= Approval actions =================
