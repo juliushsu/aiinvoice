@@ -136,6 +136,29 @@
   .conf-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .conf-high{background:var(--green);}
   .conf-mid{background:var(--amber);}
+  .dept-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;flex-shrink:0;vertical-align:middle;}
+
+  /* 流程軌道（產線指示燈） */
+  .track{display:flex;align-items:center;gap:0;margin:14px 0 4px;}
+  .track-step{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;position:relative;}
+  .track-light{width:22px;height:22px;border-radius:50%;background:var(--gray-bg);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);z-index:1;}
+  .track-step.done .track-light{background:var(--green);border-color:var(--green);color:#fff9f0;}
+  .track-step.current .track-light{background:var(--amber);border-color:var(--amber);color:#fff9f0;animation:pulse-light 1.4s ease-in-out infinite;}
+  .track-step.pending .track-light{background:var(--card);}
+  .track-step.rejected .track-light{background:var(--red);border-color:var(--red);color:#fff9f0;}
+  .track-step.rejected .track-label{color:var(--red);font-weight:600;}
+  .track-step.skip .track-light{background:transparent;border-style:dashed;color:var(--muted);}
+  .track-step.skip .track-label{color:var(--muted);font-style:italic;text-decoration:line-through;}
+  .scenario-btn{border:1px solid var(--border);background:var(--card);border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;transition:border-color .15s ease,background .15s ease;}
+  .scenario-btn:hover{border-color:var(--accent);}
+  .scenario-btn.active{border-color:var(--accent);background:var(--accent-light);font-weight:600;}
+  .track-label{font-size:11px;color:var(--muted);text-align:center;}
+  .track-step.done .track-label, .track-step.current .track-label{color:var(--text);font-weight:600;}
+  .track-line{position:absolute;top:11px;left:-50%;width:100%;height:2px;background:var(--border);z-index:0;}
+  .track-step.done .track-line{background:var(--green);}
+  .track-step:first-child .track-line{display:none;}
+  @keyframes pulse-light{0%,100%{box-shadow:0 0 0 0 rgba(177,121,58,.5);}50%{box-shadow:0 0 0 6px rgba(177,121,58,0);}}
+  @media (prefers-reduced-motion: reduce){ .track-step.current .track-light{ animation:none; } }
   .conf-low{background:var(--red);box-shadow:0 0 0 3px var(--red-bg);}
   .field-row input.low{border-color:var(--red);background:var(--red-bg);}
   .field-row input.mid{border-color:var(--amber);background:var(--amber-bg);}
@@ -171,7 +194,11 @@
       <div class="nav-item" data-page="upload"><span class="nav-icon">⇪</span> 上傳 / 清單</div>
       <div class="nav-item" data-page="review"><span class="nav-icon">✎</span> 資料校對</div>
       <div class="nav-item" data-page="expense"><span class="nav-icon">🧾</span> 費用申請</div>
+      <div class="nav-item" data-page="quickapply"><span class="nav-icon">⚡</span> 快速申請中心</div>
       <div class="nav-item" data-page="approval"><span class="nav-icon">✓</span> 審批佇列</div>
+      <div class="nav-item" data-page="vouchers"><span class="nav-icon">📎</span> 憑證與驗收</div>
+      <div class="nav-item" data-page="payment"><span class="nav-icon">💰</span> 財務與付款</div>
+      <div class="nav-item" data-page="closing"><span class="nav-icon">📅</span> 月結分析</div>
       <div class="nav-item" data-page="export"><span class="nav-icon">⇩</span> 匯出紀錄</div>
       <div class="nav-item" data-page="settings"><span class="nav-icon">⚙</span> 設定</div>
     </div>
@@ -193,6 +220,12 @@
         <div class="kpi-card"><div class="label">待審核張數 <span class="badge b-amber">待處理</span></div><div class="value" id="kpiPending">2</div><div class="sub" id="kpiPendingAmt">金額 NT$ 111,030</div></div>
         <div class="kpi-card warn"><div class="label">異常發票 <span class="badge b-red">需人工</span></div><div class="value" id="kpiAnomaly">1</div><div class="sub">需人工處理</div></div>
         <div class="kpi-card"><div class="label">本月可扣抵進項稅額 <span class="badge b-green">稅務</span></div><div class="value">NT$ 5,890</div><div class="sub">供營業稅申報參考</div></div>
+      </div>
+
+      <div class="card" id="processTrackCard">
+        <h3>案件流程軌道 <span style="font-size:11px;font-weight:400;color:var(--muted);">（產線指示燈：綠燈＝已完成，黃燈＝進行中，灰燈＝尚未開始）</span></h3>
+        <div id="processTrackTarget" style="font-size:12px;color:var(--muted);margin-bottom:2px;"></div>
+        <div class="track" id="processTrack"></div>
       </div>
 
       <div class="grid-2">
@@ -330,9 +363,47 @@
       <div class="card">
         <h3>我的申請單紀錄</h3>
         <table>
-          <thead><tr><th>申請單號</th><th>日期</th><th>申請人</th><th>項目數</th><th style="text-align:right">總金額</th><th>狀態</th></tr></thead>
+          <thead><tr><th>申請單號</th><th>部門</th><th>日期</th><th>申請人</th><th>項目數</th><th style="text-align:right">總金額</th><th>狀態</th></tr></thead>
           <tbody id="expenseAppsListBody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ============ QUICK APPLY CENTER ============ -->
+    <div class="page" id="page-quickapply">
+      <div class="page-header">
+        <div><h2>快速申請中心</h2><p>依情境快速建立單一項目的費用申請；勾選是否需要憑證／驗收，直接決定後面能不能跳過那些步驟</p></div>
+      </div>
+
+      <div class="card">
+        <h3>1. 選擇情境</h3>
+        <div id="quickScenarios" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+      </div>
+
+      <div class="card">
+        <h3>2. 填寫內容</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">部門</label><select id="qa_dept" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"></select></div>
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">申請人</label><input id="qa_name" placeholder="申請人姓名" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;"></div>
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">費用類別</label><select id="qa_category" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"></select></div>
+          <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">金額</label><input id="qa_amount" type="number" min="0" placeholder="0" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;"></div>
+        </div>
+        <div><label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">項目說明</label><input id="qa_reason" placeholder="例如：計程車資、緊急零件採購" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>3. 這筆案件是否需要憑證／驗收？</h3>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">取消勾選會直接跳過該步驟，案件核准後即可直接進入下一關（例如緊急零用金可能沒有正式憑證）。</p>
+        <div style="display:flex;gap:24px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="qa_needsVoucher" checked> 需要憑證</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="qa_needsVerification"> 需要驗收</label>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">流程預覽：</div>
+        <div class="track" id="qaTrackPreview"></div>
+      </div>
+
+      <div class="review-actions" style="border-top:none;padding-top:0;">
+        <button class="btn btn-primary" id="btnQuickApplySubmit">送出主管審核</button>
       </div>
     </div>
 
@@ -342,6 +413,8 @@
         <div><h2>審批佇列</h2><p>依金額門檻自動路由；超過 NT$50,000 需 CFO 覆核</p></div>
         <button class="btn btn-outline">批次核准已勾選</button>
       </div>
+
+      <div class="kpi-row" id="approvalSummaryRow"></div>
 
       <div class="card" style="background:transparent;border:none;box-shadow:none;padding:0;margin-bottom:8px;"><h3 style="font-size:14px;color:var(--muted);">發票審批</h3></div>
 
@@ -381,6 +454,88 @@
 
       <div class="card" style="background:transparent;border:none;box-shadow:none;padding:0;margin:24px 0 8px;"><h3 style="font-size:14px;color:var(--muted);">費用申請審批</h3></div>
       <div id="expenseApprovalList"></div>
+    </div>
+
+    <!-- ============ VOUCHERS & VERIFICATION ============ -->
+    <div class="page" id="page-vouchers">
+      <div class="page-header">
+        <div><h2>憑證與驗收管理</h2><p>核准前後都能補憑證；有實體交付物的項目在此登記實際用量並完成驗收</p></div>
+      </div>
+
+      <div class="card">
+        <h3>待補憑證</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>申請單</th><th>部門</th><th>項目</th><th>類別</th><th style="text-align:right">金額</th><th>操作</th></tr></thead>
+            <tbody id="voucherPendingBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>待驗收登記</h3>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">填寫實際用量／驗收說明後按「確認驗收」。</p>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>申請單</th><th>部門</th><th>項目</th><th>類別</th><th style="text-align:right">申請數量</th><th>實際用量／驗收說明</th><th>操作</th></tr></thead>
+            <tbody id="verifyPendingBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ FINANCE & PAYMENT ============ -->
+    <div class="page" id="page-payment">
+      <div class="page-header">
+        <div><h2>財務與付款</h2><p>核准、憑證、驗收三項條件到齊才能建立付款；未付款不能入帳</p></div>
+      </div>
+
+      <div class="card">
+        <h3>可處理付款的申請單</h3>
+        <div id="paymentEligibleList"></div>
+      </div>
+
+      <div class="card">
+        <h3>付款與入帳紀錄</h3>
+        <table>
+          <thead><tr><th>付款單號</th><th>申請單號</th><th>金額</th><th>付款日期</th><th>入帳狀態</th><th>操作</th></tr></thead>
+          <tbody id="paymentRecordsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ MONTH-END CLOSING ============ -->
+    <div class="page" id="page-closing">
+      <div class="page-header">
+        <div><h2>月結分析</h2><p>六項關鍵異常檢查、月份鎖定，並匯出當月四份標準化CSV（欄位一律用代碼）</p></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">結算月份</label>
+            <select id="closingMonth" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"></select>
+          </div>
+          <button class="btn btn-outline" id="btnToggleCloseMonth" style="margin-top:18px;"></button>
+          <div id="closingMonthStatus" style="margin-top:18px;font-size:12px;color:var(--muted);"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>六項關鍵異常檢查</h3>
+        <div id="closingChecks"></div>
+      </div>
+
+      <div class="card">
+        <h3>匯出當月四份CSV（欄位使用代碼，直接下載）</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="btnExportClosingInvoices">⇩ 發票主檔.csv</button>
+          <button class="btn btn-primary" id="btnExportClosingApps">⇩ 費用申請主檔.csv</button>
+          <button class="btn btn-primary" id="btnExportClosingItems">⇩ 費用項目明細.csv</button>
+          <button class="btn btn-primary" id="btnExportClosingPayments">⇩ 付款與入帳.csv</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:12px;">代碼對照：部門代碼／費用類別代碼／憑證類別代碼／狀態代碼／課稅別代碼，詳見「設定」頁。</p>
+      </div>
     </div>
 
     <!-- ============ EXPORT ============ -->
@@ -492,6 +647,10 @@
   function goPage(name){
     navItems.forEach(n=>n.classList.toggle('active', n.dataset.page===name));
     pages.forEach(p=>p.classList.toggle('active', p.id === 'page-'+name));
+    if(name==='quickapply' && typeof renderQuickApplyPage==='function') renderQuickApplyPage();
+    if(name==='vouchers' && typeof renderVoucherManagement==='function') renderVoucherManagement();
+    if(name==='payment' && typeof renderPaymentPage==='function') renderPaymentPage();
+    if(name==='closing' && typeof renderClosingPage==='function') renderClosingPage();
   }
   navItems.forEach(item=> item.addEventListener('click', ()=> goPage(item.dataset.page)));
 
@@ -564,6 +723,49 @@
     document.getElementById('kpiPending').textContent = pending.length;
     document.getElementById('kpiPendingAmt').textContent = '金額 NT$ '+pendingAmt.toLocaleString();
     document.getElementById('kpiAnomaly').textContent = anomaly;
+    renderProcessTrack();
+  }
+
+  // 產線指示燈概念：挑一個最有代表性（進度最深但尚未走完全程）的申請單，逐站顯示綠/黃/灰燈
+  function computeCaseStages(app){
+    const voucherDone = app.items.every(i=> !i.needsVoucher || i.linkedInvoiceIdx!=null);
+    const verifyDone = app.items.every(i=> !i.needsVerification || i.verified);
+    const approved = app.status === '已核准';
+    const rejected = app.status === '已退回';
+    const paid = app.paymentStatus === 'paid';
+    const posted = payments.some(p=>p.appId===app.id && p.postedToLedger);
+    const steps = [
+      { key:'submit', label:'提交申請' },
+      { key:'approve', label:'主管審核' },
+      { key:'voucher', label:'憑證齊備' },
+      { key:'verify', label:'驗收確認' },
+      { key:'pay', label:'建立付款' },
+      { key:'post', label:'入帳' },
+    ];
+    const doneFlags = [true, approved, approved&&voucherDone, approved&&voucherDone&&verifyDone, paid, posted];
+    let currentIdx = doneFlags.findIndex(d=>!d);
+    if(currentIdx === -1) currentIdx = steps.length; // 全部完成
+    return steps.map((s,i)=>({ ...s, done: doneFlags[i], current: i===currentIdx, rejected: rejected && i===1 }));
+  }
+  function renderProcessTrack(){
+    const el = document.getElementById('processTrack');
+    const targetEl = document.getElementById('processTrackTarget');
+    if(!el) return;
+    if(!expenseApps.length){ el.innerHTML=''; targetEl.textContent='目前沒有進行中的費用申請案件。'; return; }
+    // 挑進度最深、但還沒完全走完的案件當代表；若全部都走完了就挑最新一筆
+    const withProgress = expenseApps.map(a=>({ a, stages:computeCaseStages(a) }));
+    const inProgress = withProgress.filter(x=> x.stages.some(s=>!s.done));
+    const pick = (inProgress.length ? inProgress : withProgress).sort((x,y)=>
+      y.stages.filter(s=>s.done).length - x.stages.filter(s=>s.done).length
+    )[0];
+    targetEl.textContent = `目前案件：${pick.a.id}・${pick.a.name}（${pick.a.dept}）`;
+    el.innerHTML = pick.stages.map(s=>`
+      <div class="track-step ${s.rejected?'rejected':s.done?'done':s.current?'current':'pending'}">
+        <div class="track-line"></div>
+        <div class="track-light">${s.rejected?'✕':s.done?'✓':(s.current?'●':'')}</div>
+        <div class="track-label">${s.label}</div>
+      </div>
+    `).join('');
   }
 
   // ================= OCR Review page =================
@@ -700,6 +902,20 @@
       return;
     }
 
+    // 如果是從「憑證與驗收管理」頁按「掃描/上傳」補憑證進來的，回填對應申請單的那個項目，補完後留在憑證管理頁
+    if(pendingVoucherAttach != null){
+      const app = expenseApps.find(a=>a.id===pendingVoucherAttach.appId);
+      const item = app && app.items.find(i=>i.id===pendingVoucherAttach.itemId);
+      if(item){ item.linkedInvoiceIdx = currentIdx; }
+      pendingVoucherAttach = null;
+      renderVoucherManagement();
+      renderExpenseAppsList();
+      renderPaymentPage();
+      toast('已補上憑證：'+inv.no);
+      goPage('vouchers');
+      return;
+    }
+
     toast('已送出審核，通知主管進行簽核');
     goPage('upload');
   });
@@ -738,55 +954,68 @@
     };
   }
 
-  function handleFiles(fileList){
+  // 一次選多個檔案時，逐一「排隊」處理（而不是同時一起跑），避免共用的OCR引擎/畫面互相搶著跳轉，
+  // 也讓辨識順序跟你選檔的順序一致，方便你對照著逐筆核對
+  async function handleFiles(fileList){
     const files = Array.from(fileList||[]);
     if(!files.length) return;
-    files.forEach(file=>{
-      uploadCounter++;
-      const inv = {
-        no: '待辨識-'+String(uploadCounter).padStart(3,'0'),
-        date:'-', vendor:'（處理中…）', type:'-', amount:0, status:'待辨識',
-        image:null, fileType:file.type, fileName:file.name,
-        ocr: emptyOcr(),
-      };
-      const idx = invoices.length;
-      invoices.push(inv);
-      renderTable();
+    if(files.length > 1) toast(`已選取 ${files.length} 個檔案，將依序逐一辨識…`);
+    for(const file of files){
+      await processOneFile(file);
+    }
+  }
 
-      if(file.type.startsWith('image/')){
-        const reader = new FileReader();
-        reader.onload = e=>{ inv.image = e.target.result; runOcr(inv, idx); };
-        reader.readAsDataURL(file);
-      } else if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name)){
-        (async ()=>{
-          try{
-            if(typeof pdfjsLib === 'undefined') throw new Error('PDF解析引擎（PDF.js）尚未載入成功，請確認網路連線');
-            toast('正在把PDF第1頁轉成圖片…（多頁PDF僅處理第1頁）');
-            const canvas = await Promise.race([
-              renderPdfFirstPage(file),
-              new Promise((_,rej)=>setTimeout(()=>rej(new Error('PDF轉換逾時，可能是檔案過大或格式特殊')), 15000)),
-            ]);
-            inv.image = canvas.toDataURL('image/png');
-            inv.fileType = 'image/png'; // 轉成圖片後，跟一般照片走同一套QR/OCR辨識流程
-            runOcr(inv, idx);
-          } catch(err){
-            console.error('PDF render failed', err);
-            inv.status = '待確認';
-            inv.date = '(請確認)'; inv.vendor = '(請確認)'; inv.type = inv.ocr.type.v;
-            inv.rawOcrText = '⚠ PDF 轉換失敗：' + (err && err.message ? err.message : String(err)) + '\n請手動輸入下列欄位，或改用照片/截圖上傳。';
-            renderTable();
-            openReview(idx);
-          }
-        })();
-      } else {
-        // 其他非圖片、非PDF格式：暫以手動輸入示範
+  function readFileAsDataUrl(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = e=> resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function processOneFile(file){
+    uploadCounter++;
+    const inv = {
+      no: '待辨識-'+String(uploadCounter).padStart(3,'0'),
+      date:'-', vendor:'（處理中…）', type:'-', amount:0, status:'待辨識',
+      image:null, fileType:file.type, fileName:file.name,
+      ocr: emptyOcr(),
+    };
+    const idx = invoices.length;
+    invoices.push(inv);
+    renderTable();
+
+    if(file.type.startsWith('image/')){
+      inv.image = await readFileAsDataUrl(file);
+      await runOcr(inv, idx);
+    } else if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name)){
+      try{
+        if(typeof pdfjsLib === 'undefined') throw new Error('PDF解析引擎（PDF.js）尚未載入成功，請確認網路連線');
+        toast('正在把PDF第1頁轉成圖片…（多頁PDF僅處理第1頁）');
+        const canvas = await Promise.race([
+          renderPdfFirstPage(file),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('PDF轉換逾時，可能是檔案過大或格式特殊')), 15000)),
+        ]);
+        inv.image = canvas.toDataURL('image/png');
+        inv.fileType = 'image/png'; // 轉成圖片後，跟一般照片走同一套QR/OCR辨識流程
+        await runOcr(inv, idx);
+      } catch(err){
+        console.error('PDF render failed', err);
         inv.status = '待確認';
         inv.date = '(請確認)'; inv.vendor = '(請確認)'; inv.type = inv.ocr.type.v;
+        inv.rawOcrText = '⚠ PDF 轉換失敗：' + (err && err.message ? err.message : String(err)) + '\n請手動輸入下列欄位，或改用照片/截圖上傳。';
         renderTable();
-        toast('不支援的檔案格式，請對照檔名手動輸入');
         openReview(idx);
       }
-    });
+    } else {
+      // 其他非圖片、非PDF格式：暫以手動輸入示範
+      inv.status = '待確認';
+      inv.date = '(請確認)'; inv.vendor = '(請確認)'; inv.type = inv.ocr.type.v;
+      renderTable();
+      toast('不支援的檔案格式，請對照檔名手動輸入');
+      openReview(idx);
+    }
   }
 
   // ---- PDF → 圖片（用 PDF.js 把第1頁畫成 canvas，之後就跟一般照片走同一套QR/OCR流程） ----
@@ -853,31 +1082,84 @@
 
   // 手機拍照角度、遠近、QR在畫面裡的相對大小落差很大，jsQR 不會自動做多尺度搜尋，
   // 所以我們自己對原圖＋兩種縮小版本，各自嘗試多種常見裁切範圍，盡量涵蓋「QR只占畫面一小塊、偏某一角」的情況
-  async function tryDecodeInvoiceQr(canvas){
-    if(typeof jsQR === 'undefined') return null;
+  // 找到一個QR後，把它在畫面上的範圍塗成灰色，這樣同一塊影像再掃一次時才不會又抓到同一個QR，
+  // 藉此才能在「一張照片有好幾張發票」的情況下，把每一個QR都找出來
+  function maskQrRegion(imgData, location){
+    if(!location) return;
+    const xs = [location.topLeftCorner.x, location.topRightCorner.x, location.bottomLeftCorner.x, location.bottomRightCorner.x];
+    const ys = [location.topLeftCorner.y, location.topRightCorner.y, location.bottomLeftCorner.y, location.bottomRightCorner.y];
+    const minX = Math.max(0, Math.floor(Math.min(...xs)) - 4);
+    const maxX = Math.min(imgData.width, Math.ceil(Math.max(...xs)) + 4);
+    const minY = Math.max(0, Math.floor(Math.min(...ys)) - 4);
+    const maxY = Math.min(imgData.height, Math.ceil(Math.max(...ys)) + 4);
+    const d = imgData.data;
+    for(let y=minY; y<maxY; y++){
+      for(let x=minX; x<maxX; x++){
+        const i = (y*imgData.width + x) * 4;
+        d[i]=200; d[i+1]=200; d[i+2]=200; d[i+3]=255;
+      }
+    }
+  }
+
+  // 回傳陣列：一張照片可能同時有好幾張發票（好幾組QR），全部找出來各自獨立處理
+  // 細切格線（可重疊）：jsQR 一次畫面裡有兩組以上的定位標記時常常會判斷不出任何一個QR
+  // （多組角標互相干擾），切成較小的格子後，每一格通常只包含一張發票的QR，比較容易單獨解出
+  function gridRegions(width, height, cols, rows){
+    // 刻意「不」加邊界重疊：實測發現只要格子稍微重疊到鄰格，就會把兩個QR的角標一起框進來，
+    // jsQR反而會判斷失敗（多組定位標記互相干擾），緊貼、不重疊的格線才能真正把並排的QR各自切開。
+    const regions = [];
+    const tileW = width/cols, tileH = height/rows;
+    for(let r=0; r<rows; r++){
+      for(let c=0; c<cols; c++){
+        const x = Math.floor(c*tileW);
+        const y = Math.floor(r*tileH);
+        const w = Math.min(width-x, Math.ceil(tileW));
+        const h = Math.min(height-y, Math.ceil(tileH));
+        regions.push({x,y,w,h});
+      }
+    }
+    return regions;
+  }
+
+  // 回傳陣列：一張照片可能同時有好幾張發票（好幾組QR），盡量把每一個都找出來。
+  // 做法：對每個嘗試的裁切範圍各自掃描（含塗灰重掃），把不同範圍找到的結果用QR原始字串去重後累積起來，
+  // 而不是「找到一組就直接收工」——因為好幾張發票放在一起時，往往要靠不同的裁切格子才能各自解出一張。
+  async function tryDecodeAllInvoiceQrs(canvas){
+    if(typeof jsQR === 'undefined') return [];
+    const foundMap = new Map(); // raw QR字串 -> 解析結果，用來跨範圍去重
     const scales = [
       { cv: canvas, extra:false },
       { cv: scaleCanvas(canvas, 1400), extra:true },
       { cv: scaleCanvas(canvas, 800), extra:true },
     ];
-    const seen = new Set();
+    const seenWidths = new Set();
     for(const { cv, extra } of scales){
-      if(seen.has(cv.width)) continue;
-      seen.add(cv.width);
+      if(seenWidths.has(cv.width)) continue;
+      seenWidths.add(cv.width);
       const ctx = cv.getContext('2d');
       const { width, height } = cv;
-      const regions = extra ? basicRegions(width,height).concat(extraRegions(width,height)) : basicRegions(width,height);
+      let regions = extra ? basicRegions(width,height).concat(extraRegions(width,height)) : basicRegions(width,height);
+      regions = regions.concat(
+        gridRegions(width, height, 2, 1), gridRegions(width, height, 3, 1), gridRegions(width, height, 4, 1),
+        gridRegions(width, height, 1, 2), gridRegions(width, height, 1, 3),
+        gridRegions(width, height, 2, 2), gridRegions(width, height, 3, 2), gridRegions(width, height, 2, 3),
+      );
       for(const r of regions){
         let imgData;
         try{ imgData = ctx.getImageData(r.x, r.y, r.w, r.h); } catch(e){ continue; }
-        const result = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
-        if(result && result.data){
+        for(let attempt=0; attempt<4; attempt++){
+          const result = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
+          if(!result || !result.data) break;
+          if(foundMap.has(result.data)){ maskQrRegion(imgData, result.location); continue; }
           const parsed = parseTwEinvoiceQr(result.data);
-          if(parsed){ parsed.raw = result.data; return parsed; }
+          if(parsed){ parsed.raw = result.data; foundMap.set(result.data, parsed); }
+          else break; // 解出來的不是我們要的發票QR格式，這個裁切範圍不用再塗灰重掃
+          maskQrRegion(imgData, result.location); // 塗掉這個位置，同一格子裡如果還有其他QR，換下一個
         }
       }
+      if(foundMap.size) break; // 這個尺度已經有找到東西，通常代表夠清楚，不用再跑更小尺度浪費時間
     }
-    return null;
+    return [...foundMap.values()];
   }
 
   // 財政部電子發票 QR Code 格式（左碼）：以「:」分隔的固定欄位，前 7 段順序固定：
@@ -943,30 +1225,65 @@
     return out;
   }
 
+  // 把單一個QR解碼結果套進某張發票記錄的欄位（一張照片有多張發票時，每筆各自呼叫一次）
+  function applyQrResultToInvoice(inv, qr){
+    inv._qrRaw = qr.raw;
+    const o = inv.ocr;
+    o.invoiceNo = f(qr.invoiceNo, 'mid');
+    if(qr.dateStr) o.date = f(qr.dateStr, 'mid');
+    if(qr.randomCode) o.randomCode = f(qr.randomCode, 'mid');
+    if(qr.sellerId) o.sellerTax = f(qr.sellerId, 'mid');
+    o.buyerTax = f(qr.buyerId, 'mid'); // 空字串代表消費者未提供統編，二聯式常見
+    o.type = f(qr.buyerId ? '三聯式' : '二聯式', 'mid');
+    if(qr.totalNum!=null) o.total = f(String(qr.totalNum), 'mid');
+    if(qr.salesNum!=null){
+      o.sales = f(String(qr.salesNum), 'mid');
+      if(qr.totalNum!=null) o.tax = f(String(qr.totalNum-qr.salesNum), 'mid');
+    }
+    inv.rawOcrText = '✓ 由發票 QR Code 直接解碼（財政部固定格式），未使用文字OCR。\n解碼原始字串：\n'+ (inv._qrRaw||'');
+  }
+  function finalizeInvoiceFields(inv){
+    inv.status = '待確認';
+    inv.date = inv.ocr.date.v || '(請確認)';
+    inv.vendor = inv.ocr.sellerName.v || '(請確認)';
+    inv.type = inv.ocr.type.v;
+  }
+
   async function runOcr(inv, idx){
     inv.status = '辨識中';
     renderTable();
     try{
       const canvas = await loadToCanvas(inv.image);
 
-      // 優先嘗試 QR Code 解碼（電子發票必印，格式固定，遠比 OCR 準確）
+      // 優先嘗試 QR Code 解碼（電子發票必印，格式固定，遠比 OCR 準確）；一張照片若有多張發票，會找出所有能解出的QR
       toast('先偵測發票上的 QR Code…');
-      const qr = await tryDecodeInvoiceQr(canvas);
-      if(qr){
-        inv._qrRaw = qr.raw;
-        const o = inv.ocr;
-        o.invoiceNo = f(qr.invoiceNo, 'mid');
-        if(qr.dateStr) o.date = f(qr.dateStr, 'mid');
-        if(qr.randomCode) o.randomCode = f(qr.randomCode, 'mid');
-        if(qr.sellerId) o.sellerTax = f(qr.sellerId, 'mid');
-        o.buyerTax = f(qr.buyerId, 'mid'); // 空字串代表消費者未提供統編，二聯式常見
-        o.type = f(qr.buyerId ? '三聯式' : '二聯式', 'mid');
-        if(qr.totalNum!=null) o.total = f(String(qr.totalNum), 'mid');
-        if(qr.salesNum!=null){
-          o.sales = f(String(qr.salesNum), 'mid');
-          if(qr.totalNum!=null) o.tax = f(String(qr.totalNum-qr.salesNum), 'mid');
+      const qrResults = await tryDecodeAllInvoiceQrs(canvas);
+
+      if(qrResults.length > 1){
+        // 一張照片裡偵測到多張發票：第一筆沿用目前這筆記錄，其餘各自建立新記錄（共用同一張來源照片）
+        applyQrResultToInvoice(inv, qrResults[0]);
+        finalizeInvoiceFields(inv);
+        const newIndexes = [idx];
+        for(let k=1; k<qrResults.length; k++){
+          uploadCounter++;
+          const clone = {
+            no:'待辨識-'+String(uploadCounter).padStart(3,'0'), date:'-', vendor:'（處理中…）', type:'-', amount:0, status:'待確認',
+            image: inv.image, fileType: inv.fileType, fileName: inv.fileName, ocr: emptyOcr(),
+          };
+          const newIdx = invoices.length;
+          invoices.push(clone);
+          applyQrResultToInvoice(clone, qrResults[k]);
+          finalizeInvoiceFields(clone);
+          newIndexes.push(newIdx);
         }
-        inv.rawOcrText = '✓ 由發票 QR Code 直接解碼（財政部固定格式），未使用文字OCR。\n解碼原始字串：\n'+ (inv._qrRaw||'');
+        renderTable();
+        toast(`這張照片偵測到 ${qrResults.length} 張發票，已各自建立成 ${qrResults.length} 筆記錄，請用「上一筆／下一筆」逐一核對`);
+        openReview(idx);
+        return;
+      }
+
+      if(qrResults.length === 1){
+        applyQrResultToInvoice(inv, qrResults[0]);
         toast('已從 QR Code 解碼出發票基本資料，金額/統編仍請與紙本核對後再確認');
       } else {
         // 找不到可解析的 QR，退回文字 OCR
@@ -983,10 +1300,7 @@
       console.error('recognition failed', err);
       inv.rawOcrText = '⚠ 辨識失敗：' + (err && err.message ? err.message : String(err)) + '\n請確認網路連線後重新上傳，或直接手動輸入下列欄位。';
     }
-    inv.status = '待確認';
-    inv.date = inv.ocr.date.v || '(請確認)';
-    inv.vendor = inv.ocr.sellerName.v || '(請確認)';
-    inv.type = inv.ocr.type.v;
+    finalizeInvoiceFields(inv);
     renderTable();
     toast('辨識完成，請核對結果');
     openReview(idx);
@@ -1054,49 +1368,67 @@
 
   // ================= Expense Application =================
   const DEPTS = ['業務部','採購部','倉儲物流部','行銷企劃部','租賃服務部','財務部','行政總務'];
+  const DEPT_COLORS = { '業務部':'#a8572f','採購部':'#7c5a72','倉儲物流部':'#5c7280','行銷企劃部':'#b1793a','租賃服務部':'#6f7d4c','財務部':'#a34a35','行政總務':'#8d8168' };
+  const DEPT_CODES  = { '業務部':'D01','採購部':'D02','倉儲物流部':'D03','行銷企劃部':'D04','租賃服務部':'D05','財務部':'D06','行政總務':'D07' };
+  function deptDot(dept){ return `<span class="dept-dot" style="background:${DEPT_COLORS[dept]||'#8d8168'}" title="${escapeHtml(dept)}"></span>`; }
+
   const EXPENSE_CATEGORIES = [
     '進貨成本／採購費','進口報關／關稅／檢驗費','倉儲／冷藏費','運輸／物流費',
     '設備採購／維修保養費','場地／展示會／試飲活動費','樣品／招待費','差旅費',
     '佣金／仲介費','保險費','廣告行銷費','文具用品／辦公用品','水電瓦斯費','通訊費','其他',
   ];
+  const CATEGORY_CODES = Object.fromEntries(EXPENSE_CATEGORIES.map((c,i)=>[c, 'C'+String(i+1).padStart(2,'0')]));
+  // 有實體交付物／需驗收成果的類別（設備、進貨、倉儲等）預設需要驗收；純服務性支出（差旅、佣金等）預設不用
+  const VERIFY_BY_DEFAULT = new Set(['進貨成本／採購費','設備採購／維修保養費','倉儲／冷藏費','運輸／物流費','場地／展示會／試飲活動費']);
+
   const VOUCHER_TYPES = ['電子發票（二聯式）','電子發票（三聯式）','收據','國外發票','無單據（請加註原因）'];
+  const VOUCHER_CODES = Object.fromEntries(VOUCHER_TYPES.map((v,i)=>[v, 'V'+String(i+1).padStart(2,'0')]));
+  const STATUS_CODES = { '待辨識':'S01','辨識中':'S01','待確認':'S02','待簽核':'S03','已核准':'S04','異常':'S05','已匯出':'S06','已退回':'S07','草稿':'S08' };
+  const TAX_TYPE_CODES = { '應稅':'T01','零稅率':'T02','免稅':'T03' };
 
   let expenseItemCounter = 0;
   function newExpenseItem(){
     expenseItemCounter++;
-    return { id:expenseItemCounter, category:EXPENSE_CATEGORIES[0], voucherType:VOUCHER_TYPES[0], reason:'', qty:1, unitPrice:0, amount:0, linkedInvoiceIdx:null };
+    const category = EXPENSE_CATEGORIES[0];
+    return { id:expenseItemCounter, category, voucherType:VOUCHER_TYPES[0], reason:'', qty:1, unitPrice:0, amount:0,
+      linkedInvoiceIdx:null, needsVoucher:true, needsVerification:VERIFY_BY_DEFAULT.has(category), verified:false, actualUsage:'' };
   }
   let expenseDraft = { items:[newExpenseItem()] };
   let pendingExpenseAttach = null; // 記錄目前是哪一列費用項目按了「掃描/上傳憑證」，等發票審核完成後要回填
 
+  // 財務與付款、月結分析用
+  const payments = []; // { id, appId, amount, date, postedToLedger }
+  let paymentCounter = 0;
+  const closedMonths = new Set(); // 'YYYY-MM'，已鎖定月結的月份
+
   function mockItem(overrides){
-    return Object.assign(newExpenseItem(), overrides);
+    return Object.assign(newExpenseItem(), { needsVerification: VERIFY_BY_DEFAULT.has(overrides.category), verified:true }, overrides);
   }
   let expenseAppCounter = 3;
   const expenseApps = [
     {
-      id:'EXP-0001', dept:'業務部', title:'業務專員', name:'王小明', date:'2026/08/12', status:'已核准',
+      id:'EXP-0001', dept:'業務部', title:'業務專員', name:'王小明', date:'2026/08/12', status:'已核准', coSigned:false, paymentStatus:'unpaid',
       items:[
-        mockItem({ category:'進貨成本／採購費', voucherType:'電子發票（三聯式）', reason:'清酒進貨（獺祭 純米大吟釀 x12）', qty:12, unitPrice:1200, amount:14400 }),
-        mockItem({ category:'進口報關／關稅／檢驗費', voucherType:'國外發票', reason:'8月進口清酒關稅代墊', qty:1, unitPrice:3200, amount:3200 }),
-        mockItem({ category:'樣品／招待費', voucherType:'收據', reason:'客戶試飲樣品費', qty:1, unitPrice:1800, amount:1800 }),
+        mockItem({ category:'進貨成本／採購費', voucherType:'電子發票（三聯式）', reason:'清酒進貨（獺祭 純米大吟釀 x12）', qty:12, unitPrice:1200, amount:14400, actualUsage:'實收12箱，已入庫' }),
+        mockItem({ category:'進口報關／關稅／檢驗費', voucherType:'國外發票', reason:'8月進口清酒關稅代墊', qty:1, unitPrice:3200, amount:3200, needsVerification:false }),
+        mockItem({ category:'樣品／招待費', voucherType:'收據', reason:'客戶試飲樣品費', qty:1, unitPrice:1800, amount:1800, needsVerification:false }),
       ],
     },
     {
-      id:'EXP-0002', dept:'倉儲物流部', title:'倉儲主任', name:'林志豪', date:'2026/08/18', status:'待簽核',
+      id:'EXP-0002', dept:'倉儲物流部', title:'倉儲主任', name:'林志豪', date:'2026/08/18', status:'待簽核', coSigned:false, paymentStatus:'unpaid',
       items:[
-        mockItem({ category:'倉儲／冷藏費', voucherType:'電子發票（三聯式）', reason:'8月低溫倉儲租金', qty:1, unitPrice:22000, amount:22000 }),
+        mockItem({ category:'倉儲／冷藏費', voucherType:'電子發票（三聯式）', reason:'8月低溫倉儲租金', qty:1, unitPrice:22000, amount:22000, verified:false }),
         mockItem({ category:'運輸／物流費', voucherType:'電子發票（二聯式）', reason:'高雄港到台北倉配送', qty:1, unitPrice:6500, amount:6500 }),
-        mockItem({ category:'設備採購／維修保養費', voucherType:'收據', reason:'製冰／冷藏機保養', qty:1, unitPrice:4200, amount:4200 }),
+        mockItem({ category:'設備採購／維修保養費', voucherType:'收據', reason:'製冰／冷藏機保養', qty:1, unitPrice:4200, amount:4200, linkedInvoiceIdx:null, verified:false }),
       ],
     },
     {
-      id:'EXP-0003', dept:'行銷企劃部', title:'行銷專員', name:'陳美華', date:'2026/08/20', status:'待簽核',
+      id:'EXP-0003', dept:'行銷企劃部', title:'行銷專員', name:'陳美華', date:'2026/08/20', status:'待簽核', coSigned:false, paymentStatus:'unpaid',
       items:[
-        mockItem({ category:'場地／展示會／試飲活動費', voucherType:'電子發票（三聯式）', reason:'秋季日本酒展攤位費', qty:1, unitPrice:35000, amount:35000 }),
-        mockItem({ category:'廣告行銷費', voucherType:'電子發票（二聯式）', reason:'社群廣告投放', qty:1, unitPrice:8000, amount:8000 }),
-        mockItem({ category:'差旅費', voucherType:'國外發票', reason:'東京供應商拜訪機票', qty:2, unitPrice:15000, amount:30000 }),
-        mockItem({ category:'佣金／仲介費', voucherType:'收據', reason:'通路推廣佣金', qty:1, unitPrice:5000, amount:5000 }),
+        mockItem({ category:'場地／展示會／試飲活動費', voucherType:'電子發票（三聯式）', reason:'秋季日本酒展攤位費', qty:1, unitPrice:35000, amount:35000, verified:false }),
+        mockItem({ category:'廣告行銷費', voucherType:'電子發票（二聯式）', reason:'社群廣告投放', qty:1, unitPrice:8000, amount:8000, needsVerification:false }),
+        mockItem({ category:'差旅費', voucherType:'國外發票', reason:'東京供應商拜訪機票', qty:2, unitPrice:15000, amount:30000, needsVerification:false }),
+        mockItem({ category:'佣金／仲介費', voucherType:'收據', reason:'通路推廣佣金', qty:1, unitPrice:5000, amount:5000, needsVerification:false }),
       ],
     },
   ];
@@ -1174,6 +1506,9 @@
     if(!name){ toast('請填寫申請人姓名'); return; }
     const validItems = expenseDraft.items.filter(i=> i.reason.trim() || i.amount>0);
     if(!validItems.length){ toast('請至少填寫一筆費用項目（項目名稱或金額擇一即可）'); return; }
+    const expDate = document.getElementById('exp_date').value || '(未填)';
+    const expMonth = monthOf(expDate);
+    if(expMonth && closedMonths.has(expMonth)){ toast(expMonth+' 已結帳鎖定，無法新增該月份的費用申請'); return; }
 
     expenseAppCounter++;
     const app = {
@@ -1181,8 +1516,8 @@
       dept: document.getElementById('exp_dept').value,
       title: document.getElementById('exp_title').value.trim() || '(未填)',
       name,
-      date: document.getElementById('exp_date').value || '(未填)',
-      status: '待簽核',
+      date: expDate,
+      status: '待簽核', coSigned:false, paymentStatus:'unpaid',
       items: expenseDraft.items.map(i=>({...i})),
     };
     expenseApps.push(app);
@@ -1200,13 +1535,15 @@
   function renderExpenseAppsList(){
     const body = document.getElementById('expenseAppsListBody');
     if(!expenseApps.length){
-      body.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px;">尚未送出任何申請單</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:20px;">尚未送出任何申請單</td></tr>';
       return;
     }
     body.innerHTML = expenseApps.map(app=>{
       const total = app.items.reduce((s,i)=>s+i.amount,0);
       return `<tr>
-        <td>${app.id}</td><td>${escapeHtml(app.date)}</td><td>${escapeHtml(app.name)}</td>
+        <td>${app.id}</td>
+        <td>${deptDot(app.dept)}${escapeHtml(app.dept)}</td>
+        <td>${escapeHtml(app.date)}</td><td>${escapeHtml(app.name)}</td>
         <td>${app.items.length}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums;">NT$ ${total.toLocaleString()}</td>
         <td><span class="badge ${badgeMap[app.status]||'b-gray'}">${app.status}</span></td>
@@ -1214,8 +1551,24 @@
     }).join('');
   }
 
+  function renderApprovalSummary(){
+    const row = document.getElementById('approvalSummaryRow');
+    if(!row) return;
+    const pendingInvoices = invoices.filter(i=>i.status==='待簽核');
+    const pendingApps = expenseApps.filter(a=>a.status==='待簽核');
+    const pendingAppsTotal = pendingApps.reduce((s,a)=>s+a.items.reduce((x,i)=>x+i.amount,0),0);
+    const needCoSign = pendingApps.filter(a=> a.items.reduce((x,i)=>x+i.amount,0) > 50000 && !a.coSigned).length;
+    row.innerHTML = `
+      <div class="kpi-card"><div class="label">待簽核發票 <span class="badge b-blue">發票</span></div><div class="value">${pendingInvoices.length}</div><div class="sub">金額 NT$ ${pendingInvoices.reduce((s,i)=>s+i.amount,0).toLocaleString()}</div></div>
+      <div class="kpi-card"><div class="label">待簽核申請單 <span class="badge b-amber">費用</span></div><div class="value">${pendingApps.length}</div><div class="sub">金額 NT$ ${pendingAppsTotal.toLocaleString()}</div></div>
+      <div class="kpi-card ${needCoSign?'warn':''}"><div class="label">建議加簽件數 <span class="badge b-red">＞5萬</span></div><div class="value">${needCoSign}</div><div class="sub">超過NT$50,000尚未加簽</div></div>
+      <div class="kpi-card"><div class="label">合計待處理金額 <span class="badge b-purple">總覽</span></div><div class="value">NT$ ${(pendingInvoices.reduce((s,i)=>s+i.amount,0)+pendingAppsTotal).toLocaleString()}</div><div class="sub">發票＋費用申請</div></div>
+    `;
+  }
+
   function renderExpenseApprovalList(){
     const container = document.getElementById('expenseApprovalList');
+    renderApprovalSummary();
     const pending = expenseApps.filter(a=>a.status==='待簽核');
     if(!pending.length){
       container.innerHTML = '<p style="color:var(--muted);font-size:13px;">目前沒有待簽核的費用申請單。</p>';
@@ -1223,43 +1576,54 @@
     }
     container.innerHTML = pending.map(app=>{
       const total = app.items.reduce((s,i)=>s+i.amount,0);
+      const overThreshold = total > 50000;
       const itemsHtml = app.items.map(i=>`
         <tr>
           <td>${escapeHtml(i.category)}</td><td>${escapeHtml(i.reason)||'-'}</td>
           <td style="text-align:right">${i.qty}</td>
           <td style="text-align:right">${i.unitPrice.toLocaleString()}</td>
           <td style="text-align:right">${i.amount.toLocaleString()}</td>
-          <td>${i.linkedInvoiceIdx!=null ? '✓ 已附發票' : '—'}</td>
+          <td>${i.linkedInvoiceIdx!=null ? '<span class="badge b-green">✓ 已附</span>' : (i.needsVoucher ? '<span class="badge b-red">待補</span>' : '<span class="badge b-gray">免附</span>')}</td>
+          <td>${!i.needsVerification ? '<span class="badge b-gray">免驗收</span>' : (i.verified ? '<span class="badge b-green">✓ 已驗收</span>' : '<span class="badge b-amber">待驗收</span>')}</td>
         </tr>`).join('');
       return `
         <div class="approval-card" data-expense-id="${app.id}">
           <div class="approval-top">
             <div class="info">
-              <b>${app.id} ・ ${escapeHtml(app.name)}（${escapeHtml(app.dept)} / ${escapeHtml(app.title)}）</b>
+              <b>${deptDot(app.dept)}${app.id} ・ ${escapeHtml(app.name)}（${escapeHtml(app.dept)} / ${escapeHtml(app.title)}）</b>
               <div class="meta">申請日期：${escapeHtml(app.date)}・共 ${app.items.length} 筆項目</div>
-              ${total>50000 ? '<div class="threshold-tag">＞NT$50,000　需 CFO 覆核</div>' : ''}
+              ${overThreshold ? `<div class="threshold-tag" style="background:var(--red-bg);color:var(--red);">＞NT$50,000　建議加簽 ${app.coSigned?'（已加簽 ✓）':''}</div>` : ''}
             </div>
             <div class="amount">NT$ ${total.toLocaleString()}</div>
           </div>
           <div style="overflow-x:auto;">
             <table style="margin:12px 0;font-size:12px;">
-              <thead><tr><th>類別</th><th>項目</th><th>數量</th><th>單價</th><th>金額</th><th>憑證</th></tr></thead>
+              <thead><tr><th>類別</th><th>項目</th><th>數量</th><th>單價</th><th>金額</th><th>憑證</th><th>驗收</th></tr></thead>
               <tbody>${itemsHtml}</tbody>
             </table>
           </div>
           <div class="approval-btns">
             <button class="btn btn-green btn-sm expense-approve-btn" data-id="${app.id}">✓ 核准</button>
             <button class="btn btn-red btn-sm expense-reject-btn" data-id="${app.id}">✕ 退回</button>
+            ${overThreshold && !app.coSigned ? `<button class="btn btn-outline btn-sm expense-cosign-btn" data-id="${app.id}">✎ 加簽確認</button>` : ''}
           </div>
           <textarea class="reject-note" placeholder="請填寫退回原因..."></textarea>
         </div>`;
     }).join('');
     container.querySelectorAll('.expense-approve-btn').forEach(btn=> btn.addEventListener('click', ()=>{
       const app = expenseApps.find(a=>a.id===btn.dataset.id);
+      const total = app.items.reduce((s,i)=>s+i.amount,0);
+      if(total>50000 && !app.coSigned){ toast('金額超過NT$50,000，請先完成加簽確認才能核准'); return; }
       app.status = '已核准';
       renderExpenseApprovalList();
       renderExpenseAppsList();
       toast('已核准 '+app.id);
+    }));
+    container.querySelectorAll('.expense-cosign-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+      const app = expenseApps.find(a=>a.id===btn.dataset.id);
+      app.coSigned = true;
+      renderExpenseApprovalList();
+      toast('已完成加簽確認 '+app.id);
     }));
     container.querySelectorAll('.expense-reject-btn').forEach(btn=> btn.addEventListener('click', ()=>{
       const card = btn.closest('.approval-card');
@@ -1295,6 +1659,95 @@
   }
   document.getElementById('btnExportExpenseCsv').addEventListener('click', exportExpenseCsv);
 
+  // ================= Quick Apply Center =================
+  const QUICK_SCENARIOS = [
+    { key:'petty', label:'小額零用金', category:'其他', needsVoucher:false, needsVerification:false },
+    { key:'repair', label:'設備維修', category:'設備採購／維修保養費', needsVoucher:true, needsVerification:true },
+    { key:'purchase', label:'進貨採購', category:'進貨成本／採購費', needsVoucher:true, needsVerification:true },
+    { key:'travel', label:'差旅暫支', category:'差旅費', needsVoucher:false, needsVerification:false },
+    { key:'sample', label:'樣品招待', category:'樣品／招待費', needsVoucher:true, needsVerification:false },
+  ];
+  let quickScenarioKey = null;
+
+  function renderQuickApplyPage(){
+    const deptSel = document.getElementById('qa_dept');
+    if(!deptSel.options.length) deptSel.innerHTML = DEPTS.map(d=>`<option>${d}</option>`).join('');
+    const catSel = document.getElementById('qa_category');
+    if(!catSel.options.length) catSel.innerHTML = EXPENSE_CATEGORIES.map(c=>`<option>${c}</option>`).join('');
+
+    document.getElementById('quickScenarios').innerHTML = QUICK_SCENARIOS.map(s=>
+      `<button type="button" class="scenario-btn ${quickScenarioKey===s.key?'active':''}" data-scenario="${s.key}">${s.label}</button>`
+    ).join('');
+    document.querySelectorAll('.scenario-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+      const sc = QUICK_SCENARIOS.find(s=>s.key===btn.dataset.scenario);
+      quickScenarioKey = sc.key;
+      document.getElementById('qa_category').value = sc.category;
+      document.getElementById('qa_needsVoucher').checked = sc.needsVoucher;
+      document.getElementById('qa_needsVerification').checked = sc.needsVerification;
+      renderQuickApplyPage();
+    }));
+    renderQaTrackPreview();
+  }
+
+  function renderQaTrackPreview(){
+    const needsVoucher = document.getElementById('qa_needsVoucher').checked;
+    const needsVerification = document.getElementById('qa_needsVerification').checked;
+    const steps = [
+      { label:'提交申請', state:'done' },
+      { label:'主管審核', state:'current' },
+      { label:'憑證齊備', state: needsVoucher ? 'pending' : 'skip' },
+      { label:'驗收確認', state: needsVerification ? 'pending' : 'skip' },
+      { label:'建立付款', state:'pending' },
+      { label:'入帳', state:'pending' },
+    ];
+    document.getElementById('qaTrackPreview').innerHTML = steps.map(s=>`
+      <div class="track-step ${s.state}">
+        <div class="track-line"></div>
+        <div class="track-light">${s.state==='done'?'✓':s.state==='current'?'●':s.state==='skip'?'—':''}</div>
+        <div class="track-label">${s.label}</div>
+      </div>`).join('');
+  }
+  document.getElementById('qa_needsVoucher').addEventListener('change', renderQaTrackPreview);
+  document.getElementById('qa_needsVerification').addEventListener('change', renderQaTrackPreview);
+
+  document.getElementById('btnQuickApplySubmit').addEventListener('click', ()=>{
+    const name = document.getElementById('qa_name').value.trim();
+    const amount = parseFloat(document.getElementById('qa_amount').value) || 0;
+    const reason = document.getElementById('qa_reason').value.trim();
+    if(!name){ toast('請填寫申請人姓名'); return; }
+    if(!reason && amount<=0){ toast('請至少填寫項目說明或金額'); return; }
+    const qaDate = new Date().toISOString().slice(0,10).replace(/-/g,'/');
+    const qaMonth = monthOf(qaDate);
+    if(qaMonth && closedMonths.has(qaMonth)){ toast(qaMonth+' 已結帳鎖定，無法新增本月費用申請'); return; }
+
+    const category = document.getElementById('qa_category').value;
+    const item = Object.assign(newExpenseItem(), {
+      category, reason, qty:1, unitPrice:amount, amount,
+      needsVoucher: document.getElementById('qa_needsVoucher').checked,
+      needsVerification: document.getElementById('qa_needsVerification').checked,
+    });
+    expenseAppCounter++;
+    const app = {
+      id:'EXP-'+String(expenseAppCounter).padStart(4,'0'),
+      dept: document.getElementById('qa_dept').value,
+      title:'(快速申請)', name, date: qaDate,
+      status:'待簽核', coSigned:false, paymentStatus:'unpaid', items:[item],
+    };
+    expenseApps.push(app);
+    renderExpenseAppsList();
+    renderExpenseApprovalList();
+    renderDashboard();
+
+    document.getElementById('qa_name').value = '';
+    document.getElementById('qa_amount').value = '';
+    document.getElementById('qa_reason').value = '';
+    quickScenarioKey = null;
+    renderQuickApplyPage();
+
+    toast('已送出快速申請 '+app.id+'，等候主管審核');
+    goPage('approval');
+  });
+
   // ================= Approval actions =================
   document.querySelectorAll('.approve-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -1309,6 +1762,241 @@
       note.style.display = note.style.display === 'block' ? 'none' : 'block';
       note.focus();
     });
+  });
+
+  // ================= #4 Vouchers & Verification management =================
+  let pendingVoucherAttach = null; // { appId, itemId } —「憑證與驗收管理」頁補憑證用（跟草稿表單的 pendingExpenseAttach 分開）
+
+  function collectPendingVouchers(){
+    const rows = [];
+    expenseApps.forEach(app=>{
+      if(app.status==='已退回') return;
+      app.items.forEach(item=>{ if(item.needsVoucher && item.linkedInvoiceIdx==null) rows.push({app,item}); });
+    });
+    return rows;
+  }
+  function collectPendingVerify(){
+    const rows = [];
+    expenseApps.forEach(app=>{
+      if(app.status==='已退回') return;
+      app.items.forEach(item=>{ if(item.needsVerification && !item.verified) rows.push({app,item}); });
+    });
+    return rows;
+  }
+  function renderVoucherManagement(){
+    const body1 = document.getElementById('voucherPendingBody');
+    const pendingV = collectPendingVouchers();
+    body1.innerHTML = pendingV.length ? pendingV.map(({app,item})=>`
+      <tr>
+        <td>${app.id}</td>
+        <td>${deptDot(app.dept)}${escapeHtml(app.dept)}</td>
+        <td>${escapeHtml(item.reason)||'-'}</td>
+        <td>${escapeHtml(item.category)}</td>
+        <td style="text-align:right">${item.amount.toLocaleString()}</td>
+        <td><button class="btn btn-outline btn-sm" data-voucher-app="${app.id}" data-voucher-item="${item.id}">掃描/上傳</button></td>
+      </tr>`).join('') : '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px;">目前沒有待補憑證的項目</td></tr>';
+    body1.querySelectorAll('[data-voucher-app]').forEach(btn=> btn.addEventListener('click', ()=>{
+      pendingVoucherAttach = { appId: btn.dataset.voucherApp, itemId: parseInt(btn.dataset.voucherItem,10) };
+      toast('請選擇這筆費用要補上的發票照片／檔案');
+      fileInput.click();
+    }));
+
+    const body2 = document.getElementById('verifyPendingBody');
+    const pendingVer = collectPendingVerify();
+    body2.innerHTML = pendingVer.length ? pendingVer.map(({app,item})=>`
+      <tr>
+        <td>${app.id}</td>
+        <td>${deptDot(app.dept)}${escapeHtml(app.dept)}</td>
+        <td>${escapeHtml(item.reason)||'-'}</td>
+        <td>${escapeHtml(item.category)}</td>
+        <td style="text-align:right">${item.qty}</td>
+        <td><input data-verify-note-app="${app.id}" data-verify-note-item="${item.id}" value="${escapeHtml(item.actualUsage)}" placeholder="例如：實收12箱，已入庫" style="width:100%;"></td>
+        <td><button class="btn btn-green btn-sm" data-verify-app="${app.id}" data-verify-item="${item.id}">確認驗收</button></td>
+      </tr>`).join('') : '<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:16px;">目前沒有待驗收登記的項目</td></tr>';
+    body2.querySelectorAll('[data-verify-app]').forEach(btn=> btn.addEventListener('click', ()=>{
+      const app = expenseApps.find(a=>a.id===btn.dataset.verifyApp);
+      const item = app.items.find(i=>i.id===parseInt(btn.dataset.verifyItem,10));
+      const noteInput = body2.querySelector(`[data-verify-note-app="${btn.dataset.verifyApp}"][data-verify-note-item="${btn.dataset.verifyItem}"]`);
+      item.actualUsage = noteInput.value.trim() || '已確認驗收';
+      item.verified = true;
+      renderVoucherManagement();
+      renderPaymentPage();
+      renderDashboard();
+      toast('已確認驗收：'+item.category);
+    }));
+  }
+
+  // ================= #5 Finance & Payment =================
+  function conditionsMet(app){
+    const approved = app.status === '已核准';
+    const voucherDone = app.items.every(i=> !i.needsVoucher || i.linkedInvoiceIdx!=null);
+    const verifyDone = app.items.every(i=> !i.needsVerification || i.verified);
+    return { approved, voucherDone, verifyDone, all: approved && voucherDone && verifyDone };
+  }
+  function renderPaymentPage(){
+    const list = document.getElementById('paymentEligibleList');
+    const candidates = expenseApps.filter(a=>a.status==='已核准' && a.paymentStatus!=='paid');
+    if(!candidates.length){
+      list.innerHTML = '<p style="color:var(--muted);font-size:13px;">目前沒有已核准、尚未付款的申請單。</p>';
+    } else {
+      const chip = (ok,label)=> `<span class="badge ${ok?'b-green':'b-red'}">${ok?'✓':'✕'} ${label}</span>`;
+      list.innerHTML = candidates.map(app=>{
+        const total = app.items.reduce((s,i)=>s+i.amount,0);
+        const c = conditionsMet(app);
+        return `
+          <div class="approval-card">
+            <div class="approval-top">
+              <div class="info">
+                <b>${deptDot(app.dept)}${app.id} ・ ${escapeHtml(app.name)}（${escapeHtml(app.dept)}）</b>
+                <div class="meta" style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">${chip(c.approved,'已核准')}${chip(c.voucherDone,'憑證齊備')}${chip(c.verifyDone,'驗收完成')}</div>
+              </div>
+              <div class="amount">NT$ ${total.toLocaleString()}</div>
+            </div>
+            <div class="approval-btns">
+              <button class="btn btn-primary btn-sm" data-pay-app="${app.id}" ${c.all?'':'disabled style="opacity:.5;cursor:not-allowed;"'}>建立付款</button>
+            </div>
+          </div>`;
+      }).join('');
+      list.querySelectorAll('[data-pay-app]').forEach(btn=> btn.addEventListener('click', ()=>{
+        const app = expenseApps.find(a=>a.id===btn.dataset.payApp);
+        const c = conditionsMet(app);
+        if(!c.all){ toast('核准／憑證／驗收尚未三項到齊，無法建立付款'); return; }
+        paymentCounter++;
+        const total = app.items.reduce((s,i)=>s+i.amount,0);
+        payments.push({ id:'PAY-'+String(paymentCounter).padStart(4,'0'), appId:app.id, amount:total, date:new Date().toISOString().slice(0,10).replace(/-/g,'/'), postedToLedger:false });
+        app.paymentStatus = 'paid';
+        renderPaymentPage();
+        renderDashboard();
+        toast('已建立付款：'+app.id);
+      }));
+    }
+
+    const body = document.getElementById('paymentRecordsBody');
+    body.innerHTML = payments.length ? payments.map(p=>`
+      <tr>
+        <td>${p.id}</td><td>${p.appId}</td>
+        <td style="text-align:right">${p.amount.toLocaleString()}</td>
+        <td>${p.date}</td>
+        <td><span class="badge ${p.postedToLedger?'b-green':'b-amber'}">${p.postedToLedger?'已入帳':'未入帳'}</span></td>
+        <td>${p.postedToLedger ? '—' : `<button class="btn btn-outline btn-sm" data-post-payment="${p.id}">入帳</button>`}</td>
+      </tr>`).join('') : '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px;">尚無付款紀錄</td></tr>';
+    body.querySelectorAll('[data-post-payment]').forEach(btn=> btn.addEventListener('click', ()=>{
+      const p = payments.find(x=>x.id===btn.dataset.postPayment);
+      p.postedToLedger = true;
+      renderPaymentPage();
+      toast('已入帳：'+p.id);
+    }));
+  }
+
+  // ================= #6 Month-end closing =================
+  function monthOf(dateStr){
+    const m = String(dateStr||'').match(/(\d{4})[-\/](\d{2})/);
+    return m ? (m[1]+'-'+m[2]) : null;
+  }
+  function computeClosingChecks(month){
+    const monthInvoices = invoices.filter(i=> monthOf(i.date)===month);
+    const monthApps = expenseApps.filter(a=> monthOf(a.date)===month);
+
+    const seenNo = {}; monthInvoices.forEach(i=>{ seenNo[i.no] = (seenNo[i.no]||0)+1; });
+    const dupNos = Object.keys(seenNo).filter(no=>seenNo[no]>1);
+
+    const badTaxId = monthInvoices.filter(i=>{
+      const s = i.ocr.sellerTax.v, b = i.ocr.buyerTax.v;
+      return (s && !/^\d{8}$/.test(s)) || (b && !/^\d{8}$/.test(b));
+    });
+
+    const badCalc = monthInvoices.filter(i=>{
+      const sales = parseFloat(String(i.ocr.sales.v||'').replace(/,/g,''));
+      const tax = parseFloat(String(i.ocr.tax.v||'').replace(/,/g,''));
+      if(isNaN(sales) || isNaN(tax)) return false;
+      return Math.abs(Math.round(sales*0.05) - tax) > 1;
+    });
+
+    const missingVoucher = [];
+    monthApps.forEach(a=> a.items.forEach(it=>{ if(it.needsVoucher && it.linkedInvoiceIdx==null) missingVoucher.push({a,it}); }));
+    const missingVerify = [];
+    monthApps.forEach(a=> a.items.forEach(it=>{ if(it.needsVerification && !it.verified) missingVerify.push({a,it}); }));
+    const overThresholdNoCoSign = monthApps.filter(a=> a.items.reduce((s,i)=>s+i.amount,0)>50000 && !a.coSigned);
+
+    return [
+      { label:'發票號碼重複', count:dupNos.length, detail:dupNos.join('、') },
+      { label:'統一編號格式錯誤', count:badTaxId.length, detail:badTaxId.map(i=>i.no).join('、') },
+      { label:'金額試算不符（銷售額×5%≠稅額）', count:badCalc.length, detail:badCalc.map(i=>i.no).join('、') },
+      { label:'費用項目缺憑證', count:missingVoucher.length, detail:missingVoucher.map(x=>x.a.id+'/'+x.it.category).join('、') },
+      { label:'費用項目未完成驗收', count:missingVerify.length, detail:missingVerify.map(x=>x.a.id+'/'+x.it.category).join('、') },
+      { label:'申請單超過NT$50,000未加簽', count:overThresholdNoCoSign.length, detail:overThresholdNoCoSign.map(a=>a.id).join('、') },
+    ];
+  }
+  function populateClosingMonths(){
+    const sel = document.getElementById('closingMonth');
+    const months = new Set();
+    invoices.forEach(i=>{ const m=monthOf(i.date); if(m) months.add(m); });
+    expenseApps.forEach(a=>{ const m=monthOf(a.date); if(m) months.add(m); });
+    const sorted = [...months].sort().reverse();
+    if(!sorted.length) sorted.push(new Date().toISOString().slice(0,7));
+    const prevValue = sel.value;
+    sel.innerHTML = sorted.map(m=>`<option value="${m}">${m}</option>`).join('');
+    if(sorted.includes(prevValue)) sel.value = prevValue;
+  }
+  function renderClosingPage(){
+    populateClosingMonths();
+    const month = document.getElementById('closingMonth').value;
+    const locked = closedMonths.has(month);
+    document.getElementById('btnToggleCloseMonth').textContent = locked ? '🔓 解除鎖定' : '🔒 鎖定本月';
+    document.getElementById('closingMonthStatus').textContent = locked ? `${month} 已鎖定，該月資料不可再異動` : `${month} 尚未鎖定`;
+
+    const checks = computeClosingChecks(month);
+    document.getElementById('closingChecks').innerHTML = checks.map(c=>`
+      <div class="alert-item">
+        <span class="badge ${c.count>0?'b-red':'b-green'}">${c.count>0?c.count+' 筆':'正常'}</span>
+        <div><div class="t1">${c.label}</div>${c.count>0?`<div class="t2">${escapeHtml(c.detail)}</div>`:''}</div>
+      </div>`).join('');
+  }
+  document.getElementById('closingMonth').addEventListener('change', renderClosingPage);
+  document.getElementById('btnToggleCloseMonth').addEventListener('click', ()=>{
+    const month = document.getElementById('closingMonth').value;
+    if(closedMonths.has(month)){ closedMonths.delete(month); toast(month+' 已解除鎖定'); }
+    else { closedMonths.add(month); toast(month+' 已鎖定，本月資料將不可再異動'); }
+    renderClosingPage();
+  });
+
+  function downloadCsv(filename, rows){
+    const csv = '﻿' + rows.map(r=>r.join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById('btnExportClosingInvoices').addEventListener('click', ()=>{
+    const month = document.getElementById('closingMonth').value;
+    const rows = invoices.filter(i=>monthOf(i.date)===month).map(i=>[
+      i.no, i.date.replace(/\//g,'-'), i.ocr.sellerTax.v, TAX_TYPE_CODES[i.ocr.taxType.v]||'', i.amount, STATUS_CODES[i.status]||''
+    ]);
+    downloadCsv(`invoices_${month}.csv`, [['發票號碼','日期','賣方統編','課稅別代碼','總金額','狀態代碼'], ...rows]);
+    toast('已下載 發票主檔.csv（'+rows.length+' 筆）');
+  });
+  document.getElementById('btnExportClosingApps').addEventListener('click', ()=>{
+    const month = document.getElementById('closingMonth').value;
+    const rows = expenseApps.filter(a=>monthOf(a.date)===month).map(a=>[a.id, DEPT_CODES[a.dept]||'', a.date.replace(/\//g,'-'), STATUS_CODES[a.status]||'', a.items.reduce((s,i)=>s+i.amount,0)]);
+    downloadCsv(`expense_apps_${month}.csv`, [['申請單號','部門代碼','申請日期','狀態代碼','總金額'], ...rows]);
+    toast('已下載 費用申請主檔.csv（'+rows.length+' 筆）');
+  });
+  document.getElementById('btnExportClosingItems').addEventListener('click', ()=>{
+    const month = document.getElementById('closingMonth').value;
+    const rows = [];
+    expenseApps.filter(a=>monthOf(a.date)===month).forEach(a=> a.items.forEach((it,idx)=>{
+      rows.push([a.id, idx+1, CATEGORY_CODES[it.category]||'', VOUCHER_CODES[it.voucherType]||'', it.qty, it.unitPrice, it.amount, it.needsVoucher?'Y':'N', it.linkedInvoiceIdx!=null?'Y':'N', it.needsVerification?'Y':'N', it.verified?'Y':'N']);
+    }));
+    downloadCsv(`expense_items_${month}.csv`, [['申請單號','項目序號','類別代碼','憑證類別代碼','數量','單價','金額','需憑證','憑證完成','需驗收','驗收完成'], ...rows]);
+    toast('已下載 費用項目明細.csv（'+rows.length+' 筆）');
+  });
+  document.getElementById('btnExportClosingPayments').addEventListener('click', ()=>{
+    const month = document.getElementById('closingMonth').value;
+    const rows = payments.filter(p=> monthOf(p.date)===month).map(p=>[p.id, p.appId, p.amount, p.date.replace(/\//g,'-'), p.postedToLedger?'Y':'N']);
+    downloadCsv(`payments_${month}.csv`, [['付款單號','申請單號','金額','付款日期','已入帳'], ...rows]);
+    toast('已下載 付款與入帳.csv（'+rows.length+' 筆）');
   });
 
   // ================= Export CSV (functional) =================
@@ -1334,6 +2022,10 @@
   renderExpenseForm();
   renderExpenseAppsList();
   renderExpenseApprovalList();
+  renderQuickApplyPage();
+  renderVoucherManagement();
+  renderPaymentPage();
+  renderClosingPage();
 </script>
 </body>
 </html>
