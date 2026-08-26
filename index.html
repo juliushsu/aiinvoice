@@ -53,8 +53,9 @@
 
   /* KPI cards */
   .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px;}
-  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}
-  .kpi-card .label{font-size:12px;color:var(--muted);}
+  .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;}
+  .kpi-card:hover{transform:translateY(-3px);box-shadow:0 10px 22px rgba(58,49,35,.12);border-color:var(--accent);}
+  .kpi-card .label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .kpi-card .value{font-size:24px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums;}
   .kpi-card .sub{font-size:11px;color:var(--muted);margin-top:4px;}
   .kpi-card.warn .value{color:var(--red);}
@@ -64,14 +65,25 @@
   .card h3{margin:0 0 14px;font-size:15px;font-weight:600;}
 
   /* bars */
-  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;}
-  .bar-label{width:90px;color:var(--muted);flex-shrink:0;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin:0 -8px 10px;padding:6px 8px;font-size:12px;border-radius:8px;transition:background .18s ease;}
+  .bar-row:hover{background:var(--accent-light);}
+  .bar-label{width:90px;flex-shrink:0;}
+  .bar-label .badge{width:100%;text-align:center;box-sizing:border-box;transition:transform .18s ease;}
+  .bar-row:hover .bar-label .badge{transform:scale(1.06);}
+  .bar-row:hover .bar-fill{filter:brightness(1.12);}
   .bar-track{flex:1;background:var(--gray-bg);border-radius:4px;height:14px;overflow:hidden;}
-  .bar-fill{background:var(--accent);height:100%;border-radius:4px;}
+  .bar-fill{background:var(--accent);height:100%;border-radius:4px;transition:filter .18s ease;}
+
+  @media (prefers-reduced-motion: reduce){
+    .kpi-card, .bar-row, .bar-label .badge, .bar-fill{ transition:none !important; }
+    .kpi-card:hover{ transform:none; }
+    .bar-row:hover .bar-label .badge{ transform:none; }
+  }
   .bar-val{width:60px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;}
 
-  .alert-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .alert-item{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
   .alert-item:last-child{border-bottom:none;}
+  .alert-item .badge{margin-top:2px;flex-shrink:0;}
   .alert-dot{width:8px;height:8px;border-radius:50%;background:var(--red);margin-top:5px;flex-shrink:0;}
   .alert-item .t1{font-weight:600;}
   .alert-item .t2{color:var(--muted);font-size:12px;}
@@ -177,25 +189,25 @@
       </div>
 
       <div class="kpi-row">
-        <div class="kpi-card"><div class="label">本月已處理張數</div><div class="value" id="kpiCount">5</div><div class="sub" id="kpiAmount">總金額 NT$ 129,790</div></div>
-        <div class="kpi-card"><div class="label">待審核張數</div><div class="value" id="kpiPending">2</div><div class="sub" id="kpiPendingAmt">金額 NT$ 111,030</div></div>
-        <div class="kpi-card warn"><div class="label">異常發票</div><div class="value" id="kpiAnomaly">1</div><div class="sub">需人工處理</div></div>
-        <div class="kpi-card"><div class="label">本月可扣抵進項稅額</div><div class="value">NT$ 5,890</div><div class="sub">供營業稅申報參考</div></div>
+        <div class="kpi-card"><div class="label">本月已處理張數 <span class="badge b-blue">本月</span></div><div class="value" id="kpiCount">5</div><div class="sub" id="kpiAmount">總金額 NT$ 129,790</div></div>
+        <div class="kpi-card"><div class="label">待審核張數 <span class="badge b-amber">待處理</span></div><div class="value" id="kpiPending">2</div><div class="sub" id="kpiPendingAmt">金額 NT$ 111,030</div></div>
+        <div class="kpi-card warn"><div class="label">異常發票 <span class="badge b-red">需人工</span></div><div class="value" id="kpiAnomaly">1</div><div class="sub">需人工處理</div></div>
+        <div class="kpi-card"><div class="label">本月可扣抵進項稅額 <span class="badge b-green">稅務</span></div><div class="value">NT$ 5,890</div><div class="sub">供營業稅申報參考</div></div>
       </div>
 
       <div class="grid-2">
         <div class="card">
           <h3>依部門分類金額</h3>
-          <div class="bar-row"><div class="bar-label">行銷部</div><div class="bar-track"><div class="bar-fill" style="width:70%"></div></div><div class="bar-val">68,000</div></div>
-          <div class="bar-row"><div class="bar-label">行政總務</div><div class="bar-track"><div class="bar-fill" style="width:20%"></div></div><div class="bar-val">18,430</div></div>
-          <div class="bar-row"><div class="bar-label">資訊部</div><div class="bar-track"><div class="bar-fill" style="width:44%"></div></div><div class="bar-val">42,800</div></div>
-          <div class="bar-row"><div class="bar-label">其他</div><div class="bar-track"><div class="bar-fill" style="width:6%"></div></div><div class="bar-val">560</div></div>
+          <div class="bar-row"><div class="bar-label"><span class="badge b-purple">行銷部</span></div><div class="bar-track"><div class="bar-fill" style="width:70%"></div></div><div class="bar-val">68,000</div></div>
+          <div class="bar-row"><div class="bar-label"><span class="badge b-blue">行政總務</span></div><div class="bar-track"><div class="bar-fill" style="width:20%"></div></div><div class="bar-val">18,430</div></div>
+          <div class="bar-row"><div class="bar-label"><span class="badge b-green">資訊部</span></div><div class="bar-track"><div class="bar-fill" style="width:44%"></div></div><div class="bar-val">42,800</div></div>
+          <div class="bar-row"><div class="bar-label"><span class="badge b-gray">其他</span></div><div class="bar-track"><div class="bar-fill" style="width:6%"></div></div><div class="bar-val">560</div></div>
         </div>
         <div class="card">
           <h3>異常警示</h3>
-          <div class="alert-item"><div class="alert-dot"></div><div><div class="t1">統編檢查碼錯誤</div><div class="t2">發票 GH99887766・欣興印刷有限公司</div></div></div>
-          <div class="alert-item"><div class="alert-dot"></div><div><div class="t1">金額試算不符（銷售額×稅率≠稅額）</div><div class="t2">發票 GH99887766</div></div></div>
-          <div class="alert-item"><div class="alert-dot" style="background:var(--amber)"></div><div><div class="t1">疑似重複發票號碼</div><div class="t2">CD87654321 與歷史紀錄相同</div></div></div>
+          <div class="alert-item"><span class="badge b-red">高風險</span><div><div class="t1">統編檢查碼錯誤</div><div class="t2">發票 GH99887766・欣興印刷有限公司</div></div></div>
+          <div class="alert-item"><span class="badge b-red">高風險</span><div><div class="t1">金額試算不符（銷售額×稅率≠稅額）</div><div class="t2">發票 GH99887766</div></div></div>
+          <div class="alert-item"><span class="badge b-amber">疑似</span><div><div class="t1">疑似重複發票號碼</div><div class="t2">CD87654321 與歷史紀錄相同</div></div></div>
         </div>
       </div>
     </div>
@@ -1055,9 +1067,39 @@
     return { id:expenseItemCounter, category:EXPENSE_CATEGORIES[0], voucherType:VOUCHER_TYPES[0], reason:'', qty:1, unitPrice:0, amount:0, linkedInvoiceIdx:null };
   }
   let expenseDraft = { items:[newExpenseItem()] };
-  let expenseAppCounter = 0;
-  const expenseApps = [];
   let pendingExpenseAttach = null; // 記錄目前是哪一列費用項目按了「掃描/上傳憑證」，等發票審核完成後要回填
+
+  function mockItem(overrides){
+    return Object.assign(newExpenseItem(), overrides);
+  }
+  let expenseAppCounter = 3;
+  const expenseApps = [
+    {
+      id:'EXP-0001', dept:'業務部', title:'業務專員', name:'王小明', date:'2026/08/12', status:'已核准',
+      items:[
+        mockItem({ category:'進貨成本／採購費', voucherType:'電子發票（三聯式）', reason:'清酒進貨（獺祭 純米大吟釀 x12）', qty:12, unitPrice:1200, amount:14400 }),
+        mockItem({ category:'進口報關／關稅／檢驗費', voucherType:'國外發票', reason:'8月進口清酒關稅代墊', qty:1, unitPrice:3200, amount:3200 }),
+        mockItem({ category:'樣品／招待費', voucherType:'收據', reason:'客戶試飲樣品費', qty:1, unitPrice:1800, amount:1800 }),
+      ],
+    },
+    {
+      id:'EXP-0002', dept:'倉儲物流部', title:'倉儲主任', name:'林志豪', date:'2026/08/18', status:'待簽核',
+      items:[
+        mockItem({ category:'倉儲／冷藏費', voucherType:'電子發票（三聯式）', reason:'8月低溫倉儲租金', qty:1, unitPrice:22000, amount:22000 }),
+        mockItem({ category:'運輸／物流費', voucherType:'電子發票（二聯式）', reason:'高雄港到台北倉配送', qty:1, unitPrice:6500, amount:6500 }),
+        mockItem({ category:'設備採購／維修保養費', voucherType:'收據', reason:'製冰／冷藏機保養', qty:1, unitPrice:4200, amount:4200 }),
+      ],
+    },
+    {
+      id:'EXP-0003', dept:'行銷企劃部', title:'行銷專員', name:'陳美華', date:'2026/08/20', status:'待簽核',
+      items:[
+        mockItem({ category:'場地／展示會／試飲活動費', voucherType:'電子發票（三聯式）', reason:'秋季日本酒展攤位費', qty:1, unitPrice:35000, amount:35000 }),
+        mockItem({ category:'廣告行銷費', voucherType:'電子發票（二聯式）', reason:'社群廣告投放', qty:1, unitPrice:8000, amount:8000 }),
+        mockItem({ category:'差旅費', voucherType:'國外發票', reason:'東京供應商拜訪機票', qty:2, unitPrice:15000, amount:30000 }),
+        mockItem({ category:'佣金／仲介費', voucherType:'收據', reason:'通路推廣佣金', qty:1, unitPrice:5000, amount:5000 }),
+      ],
+    },
+  ];
 
   function renderExpenseForm(){
     const deptSel = document.getElementById('exp_dept');
